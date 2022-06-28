@@ -1,8 +1,8 @@
-# HuBMAP Search API
+# SenNet Search API
 
-The HuBMAP Search API is a thin wrapper of the Elasticsearch. It handles data indexing and reindexing into the backend Elasticsearch. It also accepts the search query and passes through to the Elasticsearch with data access security check.
+The SenNet Search API is a thin wrapper of the Elasticsearch. It handles data indexing and reindexing into the backend Elasticsearch. It also accepts the search query and passes through to the Elasticsearch with data access security check.
 
-The API documentation is available on SmartAPI at https://smart-api.info/ui/7aaf02b838022d564da776b03f357158
+The API documentation is available on SmartAPI at [to replace with smart API link]
 
 ## Working with submodule
 
@@ -59,10 +59,10 @@ Nils likes to review the descriptions here, so he is listed as a "[code owner](h
 
 The search-api base URL for each deployment environment:
 
-- DEV: `https://search-api.dev.hubmapconsortium.org`
-- TEST: `https://search-api.test.hubmapconsortium.org`
-- STAGE: `https://search-api.stage.hubmapconsortium.org`
-- PROD: `https://search.api.hubmapconsortium.org`
+- DEV: `https://search-api.dev.sennetconsortium.org`
+- TEST: `https://search-api.test.sennetconsortium.org`
+- STAGE: `https://search-api.stage.sennetconsortium.org`
+- PROD: `https://search.api.sennetconsortium.org`
 
 ## Request endpoints
 
@@ -264,6 +264,6 @@ export ENTITY_API_VERSION=a.b.c (replace with the actual released version number
 
 ## Updating API Documentation
 
-The documentation for the API calls is hosted on SmartAPI.  Modifying the `search-api-spec.yaml` file and commititng the changes to github should update the API shown on SmartAPI. SmartAPI allows users to register API documents. The documentation is associated with this github account: api-developers@hubmapconsortium.org.
+The documentation for the API calls is hosted on SmartAPI.  Modifying the `search-api-spec.yaml` file and commititng the changes to github should update the API shown on SmartAPI. SmartAPI allows users to register API documents. The documentation is associated with this github account: api-developers@sennetconsortium.org.
 
 
