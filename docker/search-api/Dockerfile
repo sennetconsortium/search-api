@@ -1,7 +1,7 @@
 # Parent image
 FROM hubmap/api-base-image:1.0.0
 
-LABEL description="HuBMAP Search API Service"
+LABEL description="SenNet Search API Service"
 
 # The commons branch to be used in requirements.txt during image build
 # Default is master branch specified in docker-compose.yml if not set before the build
