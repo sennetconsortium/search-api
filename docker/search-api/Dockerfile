@@ -1,5 +1,5 @@
 # Parent image
-FROM hubmap/api-base-image:1.0.0
+FROM sennet/api-base-image:1.0.0
 
 LABEL description="SenNet Search API Service"
 
