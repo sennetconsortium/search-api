@@ -1,0 +1,32 @@
+# Generated BUILD file
+BUILD
+
+**/.vscode/
+
+#eclipse project files
+.project
+.pydevproject
+
+# Configuration
+src/instance/app.cfg
+src/instance/search-config.yaml
+
+# log files in any path
+**/*.log
+
+# Rotated log files
+**/*.log*
+
+.idea
+
+*.DS_Store
+
+**/__pycache__/
+
+# Docker copied files and directories
+docker/search-api/src
+docker/search-api/VERSION
+docker/search-api/BUILD
+
+# Portal cache
+src/sennet_translation/addl_index_transformations/portal/cache/*.jsonld
