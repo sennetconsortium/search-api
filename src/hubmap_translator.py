@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 entity_properties_list = [
     'metadata',
-    'donor',
+    'source',
     'origin_sample',
     'source_sample',
     'ancestor_ids',
@@ -39,7 +39,7 @@ entity_properties_list = [
     'immediate_descendants',
     'datasets'
 ]
-entity_types = ['Upload', 'Donor', 'Sample', 'Dataset']
+entity_types = ['Upload', 'Source', 'Sample', 'Dataset']
 
 
 class Translator(TranslatorInterface):
@@ -100,7 +100,7 @@ class Translator(TranslatorInterface):
                 start = time.time()
 
                 # Make calls to entity-api to get a list of uuids for each entity type
-                donor_uuids_list = get_uuids_by_entity_type("donor", self.request_headers, self.DEFAULT_ENTITY_API_URL)
+                source_uuids_list = get_uuids_by_entity_type("source", self.request_headers, self.DEFAULT_ENTITY_API_URL)
                 sample_uuids_list = get_uuids_by_entity_type("sample", self.request_headers,
                                                              self.DEFAULT_ENTITY_API_URL)
                 dataset_uuids_list = get_uuids_by_entity_type("dataset", self.request_headers,
@@ -113,7 +113,7 @@ class Translator(TranslatorInterface):
                 logger.debug("merging sets into a one list...")
                 # Merge into a big list that with no duplicates
                 all_entities_uuids = set(
-                    donor_uuids_list + sample_uuids_list + dataset_uuids_list + upload_uuids_list + public_collection_uuids_list)
+                    source_uuids_list + sample_uuids_list + dataset_uuids_list + upload_uuids_list + public_collection_uuids_list)
 
                 es_uuids = []
                 # for index in ast.literal_eval(app.config['INDICES']).keys():
@@ -147,7 +147,7 @@ class Translator(TranslatorInterface):
                 # Reindex in multi-treading mode for:
                 # - each public collection
                 # - each upload, only add to the hm_consortium_entities index (private index of the default)
-                # - each donor and its descendants in the tree
+                # - each source and its descendants in the tree
                 futures_list = []
                 results = []
                 with concurrent.futures.ThreadPoolExecutor() as executor:
@@ -156,10 +156,10 @@ class Translator(TranslatorInterface):
                         for uuid in public_collection_uuids_list]
                     upload_futures_list = [executor.submit(self.translate_upload, uuid, reindex=True) for uuid in
                                            upload_uuids_list]
-                    donor_futures_list = [executor.submit(self.translate_tree, uuid) for uuid in donor_uuids_list]
+                    source_futures_list = [executor.submit(self.translate_tree, uuid) for uuid in source_uuids_list]
 
                     # Append the above three lists into one
-                    futures_list = public_collection_futures_list + upload_futures_list + donor_futures_list
+                    futures_list = public_collection_futures_list + upload_futures_list + source_futures_list
 
                     for f in concurrent.futures.as_completed(futures_list):
                         logger.debug(f.result())
@@ -241,9 +241,9 @@ class Translator(TranslatorInterface):
             self.indexer.index(entity_id, json.dumps(document), private_index, False)
 
     # Collection doesn't actually have this `data_access_level` property
-    # This method is only applied to Donor/Sample/Dataset
+    # This method is only applied to Source/Sample/Dataset
     # For Dataset, if status=='Published', it goes into the public index
-    # For Donor/Sample, `data`if any dataset down in the tree is 'Published', they should have `data_access_level` as public,
+    # For Source/Sample, `data`if any dataset down in the tree is 'Published', they should have `data_access_level` as public,
     # then they go into public index
     # Don't confuse with `data_access_level`
     def is_public(self, document):
@@ -343,23 +343,23 @@ class Translator(TranslatorInterface):
         try:
             # logger.info(f"Total threads count: {threading.active_count()}")
 
-            logger.info(f"Executing index_tree() for donor of uuid: {entity_id}")
+            logger.info(f"Executing index_tree() for source of uuid: {entity_id}")
 
             descendant_uuids = self.call_entity_api(entity_id, 'descendants', 'uuid')
 
-            # Index the donor entity itself separately
-            donor = self.call_entity_api(entity_id, 'entities')
+            # Index the source entity itself separately
+            source = self.call_entity_api(entity_id, 'entities')
 
-            self.call_indexer(donor)
+            self.call_indexer(source)
 
-            # Index all the descendants of this donor
+            # Index all the descendants of this source
             for descendant_uuid in descendant_uuids:
                 # Retrieve the entity details
                 descendant = self.call_entity_api(descendant_uuid, 'entities')
 
                 self.call_indexer(descendant)
 
-            msg = f"indexer.index_tree() finished executing for donor of uuid: {entity_id}"
+            msg = f"indexer.index_tree() finished executing for source of uuid: {entity_id}"
             logger.info(msg)
             return msg
         except Exception as e:
@@ -466,7 +466,7 @@ class Translator(TranslatorInterface):
                 dataset_doc.pop('descendant_ids')
                 dataset_doc.pop('immediate_descendants')
                 dataset_doc.pop('immediate_ancestors')
-                dataset_doc.pop('donor')
+                dataset_doc.pop('source')
                 dataset_doc.pop('origin_sample')
                 dataset_doc.pop('source_sample')
 
@@ -498,7 +498,8 @@ class Translator(TranslatorInterface):
                     temp_val = entity[key]
 
                 temp[self.attr_map['ENTITY'][key]['es_name']] = temp_val
-
+        print(f"This is temp {temp}")
+        sys.exit(0)
         for key in to_delete_keys:
             if key not in entity_properties_list:
                 entity.pop(key)
@@ -518,11 +519,11 @@ class Translator(TranslatorInterface):
         if entity['entity_type'] in entity_types:
             entity['display_subtype'] = self.generate_display_subtype(entity)
 
-    # For Upload, Dataset, Donor and Sample objects:
+    # For Upload, Dataset, Source and Sample objects:
     # add a calculated (not stored in Neo4j) field called `display_subtype` to
     # all Elasticsearch documents of the above types with the following rules:
     # Upload: Just make it "Data Upload" for all uploads
-    # Donor: "Donor"
+    # Source: "Source"
     # Sample: if specimen_type == 'organ' the display name linked to the corresponding description of organ code
     # otherwise the display name linked to the value of the corresponding description of specimen_type code
     # Dataset: the display names linked to the values in data_types as a comma separated list
@@ -532,8 +533,8 @@ class Translator(TranslatorInterface):
 
         if entity_type == 'Upload':
             display_subtype = 'Data Upload'
-        elif entity_type == 'Donor':
-            display_subtype = 'Donor'
+        elif entity_type == 'Source':
+            display_subtype = 'Source'
         elif entity_type == 'Sample':
             if 'specimen_type' in entity:
                 if entity['specimen_type'].lower() == 'organ':
@@ -554,7 +555,7 @@ class Translator(TranslatorInterface):
         else:
             # Do nothing
             logger.error(
-                f"Invalid entity_type: {entity_type}. Only generate display_subtype for Upload/Donor/Sample/Dataset")
+                f"Invalid entity_type: {entity_type}. Only generate display_subtype for Upload/Source/Sample/Dataset")
 
         return display_subtype
 
@@ -580,11 +581,11 @@ class Translator(TranslatorInterface):
                     # Add to the list
                     ancestors.append(ancestor_dict)
 
-                # Find the Donor
-                donor = None
+                # Find the Source
+                source = None
                 for a in ancestors:
-                    if a['entity_type'] == 'Donor':
-                        donor = copy.copy(a)
+                    if a['entity_type'] == 'Source':
+                        source = copy.copy(a)
                         break
 
                 descendant_ids = self.call_entity_api(entity_id, 'descendants', 'uuid')
@@ -613,7 +614,7 @@ class Translator(TranslatorInterface):
             # The origin_sample is the sample that `specimen_type` is "organ" and the `organ` code is set at the same time
             if entity['entity_type'] in ['Sample', 'Dataset']:
                 # Add new properties
-                entity['donor'] = donor
+                entity['source'] = source
 
                 entity['origin_sample'] = copy.copy(entity) if ('specimen_type' in entity) and (
                         entity['specimen_type'].lower() == 'organ') and ('organ' in entity) and (
@@ -674,8 +675,8 @@ class Translator(TranslatorInterface):
                 entity['metadata'].pop('files')
 
             # Rename for properties that are objects
-            if entity.get('donor', None):
-                self.entity_keys_rename(entity['donor'])
+            if entity.get('source', None):
+                self.entity_keys_rename(entity['source'])
             if entity.get('origin_sample', None):
                 self.entity_keys_rename(entity['origin_sample'])
             if entity.get('source_sample', None):
