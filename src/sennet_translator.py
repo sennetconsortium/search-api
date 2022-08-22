@@ -39,7 +39,7 @@ entity_properties_list = [
     'immediate_descendants',
     'datasets'
 ]
-entity_types = ['Upload', 'Source', 'Sample', 'Dataset']
+entity_types = ['Source', 'Sample', 'Dataset']
 
 
 class Translator(TranslatorInterface):
@@ -92,7 +92,7 @@ class Translator(TranslatorInterface):
             self.attr_map = json.load(json_file)
 
         # # Preload all the transformers
-        self.init_transformers()
+        # self.init_transformers()
 
     def translate_all(self):
         with app.app_context():
@@ -107,15 +107,14 @@ class Translator(TranslatorInterface):
                                                              self.DEFAULT_ENTITY_API_URL)
                 dataset_uuids_list = get_uuids_by_entity_type("dataset", self.request_headers,
                                                               self.DEFAULT_ENTITY_API_URL)
-                upload_uuids_list = get_uuids_by_entity_type("upload", self.request_headers,
-                                                             self.DEFAULT_ENTITY_API_URL)
+
                 public_collection_uuids_list = get_uuids_by_entity_type("collection", self.request_headers,
                                                                         self.DEFAULT_ENTITY_API_URL)
 
                 logger.debug("merging sets into a one list...")
                 # Merge into a big list that with no duplicates
                 all_entities_uuids = set(
-                    source_uuids_list + sample_uuids_list + dataset_uuids_list + upload_uuids_list + public_collection_uuids_list)
+                    source_uuids_list + sample_uuids_list + dataset_uuids_list + public_collection_uuids_list)
 
                 es_uuids = []
                 # for index in ast.literal_eval(app.config['INDICES']).keys():
@@ -156,12 +155,10 @@ class Translator(TranslatorInterface):
                     public_collection_futures_list = [
                         executor.submit(self.translate_public_collection, uuid, reindex=True)
                         for uuid in public_collection_uuids_list]
-                    upload_futures_list = [executor.submit(self.translate_upload, uuid, reindex=True) for uuid in
-                                           upload_uuids_list]
                     source_futures_list = [executor.submit(self.translate_tree, uuid) for uuid in source_uuids_list]
 
                     # Append the above three lists into one
-                    futures_list = public_collection_futures_list + upload_futures_list + source_futures_list
+                    futures_list = public_collection_futures_list + source_futures_list
 
                     for f in concurrent.futures.as_completed(futures_list):
                         logger.debug(f.result())
@@ -184,8 +181,6 @@ class Translator(TranslatorInterface):
 
                 if entity['entity_type'] == 'Collection':
                     self.translate_public_collection(entity_id, reindex=True)
-                elif entity['entity_type'] == 'Upload':
-                    self.translate_upload(entity_id, reindex=True)
                 else:
                     previous_revision_entity_ids = []
                     next_revision_entity_ids = []
@@ -283,22 +278,22 @@ class Translator(TranslatorInterface):
                 self.indexer.delete_document(entity_id, private_index)
 
     # When indexing, Upload WILL NEVER BE PUBLIC
-    def translate_upload(self, entity_id, reindex=False):
-        try:
-            default_private_index = self.INDICES['indices'][self.DEFAULT_INDEX_WITHOUT_PREFIX]['private']
-
-            # Retrieve the upload entity details
-            upload = self.call_entity_api(entity_id, 'entities')
-
-            self.add_datasets_to_entity(upload)
-            self.entity_keys_rename(upload)
-
-            # Add additional calculated fields if any applies to Upload
-            self.add_calculated_fields(upload)
-
-            self.call_indexer(upload, reindex, json.dumps(upload), default_private_index)
-        except Exception as e:
-            logger.error(e)
+    # def translate_upload(self, entity_id, reindex=False):
+    #     try:
+    #         default_private_index = self.INDICES['indices'][self.DEFAULT_INDEX_WITHOUT_PREFIX]['private']
+    #
+    #         # Retrieve the upload entity details
+    #         upload = self.call_entity_api(entity_id, 'entities')
+    #
+    #         self.add_datasets_to_entity(upload)
+    #         self.entity_keys_rename(upload)
+    #
+    #         # Add additional calculated fields if any applies to Upload
+    #         self.add_calculated_fields(upload)
+    #
+    #         self.call_indexer(upload, reindex, json.dumps(upload), default_private_index)
+    #     except Exception as e:
+    #         logger.error(e)
 
     def translate_public_collection(self, entity_id, reindex=False):
         try:
@@ -367,25 +362,27 @@ class Translator(TranslatorInterface):
         except Exception as e:
             logger.error(e)
 
-    def init_transformers(self):
-        for index in self.indices.keys():
-            try:
-                xform_module = self.INDICES['indices'][index]['transform']['module']
+    #TODO: Delete later
 
-                logger.info(f"Transform module to be dynamically imported: {xform_module} at time: {time.time()}")
-
-                try:
-                    m = importlib.import_module(xform_module)
-                    self.TRANSFORMERS[index] = m
-                except Exception as e:
-                    logger.error(e)
-                    msg = f"Failed to dynamically import transform module index: {index} at time: {time.time()}"
-                    logger.exception(msg)
-            except KeyError as e:
-                logger.info(f'No transform or transform module specified in the search-config.yaml for index: {index}')
-
-        logger.debug("========Preloaded transformers===========")
-        logger.debug(self.TRANSFORMERS)
+    # def init_transformers(self):
+    #     for index in self.indices.keys():
+    #         try:
+    #             xform_module = self.INDICES['indices'][index]['transform']['module']
+    #
+    #             logger.info(f"Transform module to be dynamically imported: {xform_module} at time: {time.time()}")
+    #
+    #             try:
+    #                 m = importlib.import_module(xform_module)
+    #                 self.TRANSFORMERS[index] = m
+    #             except Exception as e:
+    #                 logger.error(e)
+    #                 msg = f"Failed to dynamically import transform module index: {index} at time: {time.time()}"
+    #                 logger.exception(msg)
+    #         except KeyError as e:
+    #             logger.info(f'No transform or transform module specified in the search-config.yaml for index: {index}')
+    #
+    #     logger.debug("========Preloaded transformers===========")
+    #     logger.debug(self.TRANSFORMERS)
 
     def init_auth_helper(self):
         if AuthHelper.isInitialized() == False:
@@ -416,10 +413,10 @@ class Translator(TranslatorInterface):
 
             if target_index:
                 self.indexer.index(entity['uuid'], document, target_index, reindex)
-            elif entity['entity_type'] == 'Upload':
-                target_index = self.INDICES['indices'][self.DEFAULT_INDEX_WITHOUT_PREFIX]['private']
-
-                self.indexer.index(entity['uuid'], document, target_index, reindex)
+            # elif entity['entity_type'] == 'Upload':
+            #     target_index = self.INDICES['indices'][self.DEFAULT_INDEX_WITHOUT_PREFIX]['private']
+            #
+            #     self.indexer.index(entity['uuid'], document, target_index, reindex)
             else:
                 # write entity into indices
                 for index in self.indices.keys():
@@ -533,9 +530,7 @@ class Translator(TranslatorInterface):
         entity_type = entity['entity_type']
         display_subtype = '{unknown}'
 
-        if entity_type == 'Upload':
-            display_subtype = 'Data Upload'
-        elif entity_type == 'Source':
+        if entity_type == 'Source':
             display_subtype = 'Source'
         elif entity_type == 'Sample':
             if 'specimen_type' in entity:
@@ -557,7 +552,7 @@ class Translator(TranslatorInterface):
         else:
             # Do nothing
             logger.error(
-                f"Invalid entity_type: {entity_type}. Only generate display_subtype for Upload/Source/Sample/Dataset")
+                f"Invalid entity_type: {entity_type}. Only generate display_subtype for Source/Sample/Dataset")
 
         return display_subtype
 
