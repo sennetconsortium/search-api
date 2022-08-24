@@ -30,7 +30,7 @@ config['GROUP_ID'] = 'group_membership_ids'
 config['APP_CLIENT_ID'] = app.config['APP_CLIENT_ID']
 config['APP_CLIENT_SECRET'] = app.config['APP_CLIENT_SECRET']
 
-translator_module = importlib.import_module("hubmap_translator")
+translator_module = importlib.import_module("sennet_translator")
 
 sys.path.append("libs")
 assay_type_module = importlib.import_module("assay_type", "libs")
