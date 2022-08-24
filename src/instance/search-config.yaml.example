@@ -15,4 +15,4 @@ indices:
     document_source_endpoint: <Server URL for source documents>
     elasticsearch:
       url: <ES URL>
-      mappings: "hubmap_translation/search-default-config.yaml"
+      mappings: "sennet_translation/search-default-config.yaml"
