@@ -87,7 +87,7 @@ class Translator(TranslatorInterface):
         # Add index_version by parsing the VERSION file
         self.index_version = ((Path(__file__).absolute().parent.parent / 'VERSION').read_text()).strip()
 
-        with open(Path(__file__).resolve().parent / 'hubmap_translation' / 'neo4j-to-es-attributes.json',
+        with open(Path(__file__).resolve().parent / 'sennet_translation' / 'neo4j-to-es-attributes.json',
                   'r') as json_file:
             self.attr_map = json.load(json_file)
 
@@ -216,7 +216,7 @@ class Translator(TranslatorInterface):
                 # Clear the entity api cache
                 self.entity_api_cache.clear()
 
-                return "HuBMAP Translator.translate() finished executing"
+                return "SenNet Translator.translate() finished executing"
         except Exception:
             msg = "Exceptions during executing indexer.reindex()"
             # Log the full stack trace, prepend a line with our message
@@ -303,7 +303,7 @@ class Translator(TranslatorInterface):
     def translate_public_collection(self, entity_id, reindex=False):
         try:
             # The entity-api returns public collection with a list of connected public/published datasets, for either
-            # - a valid token but not in HuBMAP-Read group or
+            # - a valid token but not in Globus Read group or
             # - no token at all
             # Here we do NOT send over the token
             try:
@@ -312,7 +312,7 @@ class Translator(TranslatorInterface):
                 logger.exception(e)
                 # Stop running
 
-                msg = "HubMAP Translator.translate_public_collection() failed to get public collection of uuid: {entity_id} via entity-api"
+                msg = "SenNet Translator.translate_public_collection() failed to get public collection of uuid: {entity_id} via entity-api"
                 logger.error(msg)
                 sys.exit(msg)
 
@@ -450,7 +450,7 @@ class Translator(TranslatorInterface):
 
                     self.indexer.index(entity['uuid'], target_doc, private_index, reindex)
         except Exception:
-            msg = f"Exception encountered during executing HuBMAPTranslator call_indexer() for uuid: {org_node['uuid']}, entity_type: {org_node['entity_type']}"
+            msg = f"Exception encountered during executing Translator call_indexer() for uuid: {org_node['uuid']}, entity_type: {org_node['entity_type']}"
             # Log the full stack trace, prepend a line with our message
             logger.exception(msg)
 
@@ -752,7 +752,7 @@ class Translator(TranslatorInterface):
                 logger.exception(e)
 
                 # Stop running
-                msg = f"HuBMAP translator failed to reach: " + url + ". Response: " + response.json()
+                msg = f"SenNet translator failed to reach: " + url + ". Response: " + response.json()
                 logger.error(msg)
                 sys.exit(msg)
 
@@ -762,22 +762,22 @@ class Translator(TranslatorInterface):
 
     def get_public_collection(self, entity_id):
         # The entity-api returns public collection with a list of connected public/published datasets, for either
-        # - a valid token but not in HuBMAP-Read group or
+        # - a valid token but not in Globus Read group or
         # - no token at all
         # Here we do NOT send over the token
         url = self.entity_api_url + "/collections/" + entity_id
         response = requests.get(url, headers=self.request_headers, verify=False)
 
         if response.status_code != 200:
-            msg = "HuBMAP translator get_collection() failed to get public collection of uuid: " + entity_id + " via entity-api"
+            msg = "SenNet translator get_collection() failed to get public collection of uuid: " + entity_id + " via entity-api"
 
             # Log the full stack trace, prepend a line with our message
             logger.exception(msg)
 
-            logger.debug("======get_public_collection() status code from hubmap_translator======")
+            logger.debug("======get_public_collection() status code from sennet_translator======")
             logger.debug(response.status_code)
 
-            logger.debug("======get_public_collection() response text from hubmap_translator-api======")
+            logger.debug("======get_public_collection() response text from sennet_translator-api======")
             logger.debug(response.text)
 
             # Bubble up the error message from entity-api instead of sys.exit(msg)
@@ -865,10 +865,10 @@ if __name__ == "__main__":
     # Use the new key rather than the 'hmgroupids' which will be deprecated
     group_ids = user_info_dict['group_membership_ids']
 
-    # Ensure the user belongs to the HuBMAP-Data-Admin group
-    # TODO: Need to generalize this once HuBMAP authorization is updated
-    if not user_belongs_to_data_admin_group(group_ids, app.config['GLOBUS_HUBMAP_DATA_ADMIN_GROUP_UUID']):
-        msg = "The given token doesn't belong to the HuBMAP-Data-Admin group, access not granted"
+    # Ensure the user belongs to the Globus Data Admin group
+    # TODO: Need to generalize this once authorization is updated
+    if not user_belongs_to_data_admin_group(group_ids, app.config['GLOBUS_DATA_ADMIN_GROUP_UUID']):
+        msg = "The given token doesn't belong to the Globus Data Admin group, access not granted"
         # Log the full stack trace, prepend a line with our message
         logger.exception(msg)
         sys.exit(msg)
