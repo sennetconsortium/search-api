@@ -8,22 +8,11 @@ default_index: entities
 indices:
   entities: 
     active: true
-    # Set to "sn_" instead of "hm_" for SenNet
     reindex_enabled: true
-    public: hm_public_entities
-    private: hm_consortium_entities
+    public: sn_dev_public_entities
+    private: sn_dev_consortium_entities
     # Use `http://entity-api:8080` for non-localhost docker deployment
     document_source_endpoint: <Server URL for source documents>
     elasticsearch:
       url: <ES URL>
       mappings: "hubmap_translation/search-default-config.yaml"
-
-  # Only used by antibody-api to query stored documents via search-api
-  # The indexer.py doesn't use this index
-  hm_antibodies:
-    active: true
-    reindex_enabled: false
-    public: hm_antibodies
-    private: hm_antibodies
-    elasticsearch:
-      url: <ES URL>
