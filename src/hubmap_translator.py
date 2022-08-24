@@ -50,6 +50,8 @@ class Translator(TranslatorInterface):
     INDICES = {}
     TRANSFORMERS = {}
     DEFAULT_ENTITY_API_URL = ''
+    USE_SENNET_GROUPS = True
+
     indexer = None
     entity_api_cache = {}
 
