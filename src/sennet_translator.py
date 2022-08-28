@@ -12,7 +12,6 @@ from yaml import safe_load
 from flask import Flask, Response
 
 # HuBMAP commons
-from hubmap_commons import globus_groups
 from hubmap_commons.hm_auth import AuthHelper
 
 sys.path.append("search-adaptor/src")
@@ -50,7 +49,6 @@ class Translator(TranslatorInterface):
     INDICES = {}
     TRANSFORMERS = {}
     DEFAULT_ENTITY_API_URL = ''
-    USE_SENNET_GROUPS = True
 
     indexer = None
     entity_api_cache = {}
@@ -659,7 +657,7 @@ class Translator(TranslatorInterface):
                 group_uuid = entity['group_uuid']
 
                 # Get the globus groups info based on the groups json file in commons package
-                globus_groups_info = globus_groups.get_globus_groups_info()
+                globus_groups_info = self.auth_helper_instance.get_globus_groups_info()
                 groups_by_id_dict = globus_groups_info['by_id']
                 group_dict = groups_by_id_dict[group_uuid]
 
