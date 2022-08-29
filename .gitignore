@@ -30,3 +30,6 @@ docker/search-api/BUILD
 
 # Portal cache
 src/sennet_translation/addl_index_transformations/portal/cache/*.jsonld
+
+# Virtual Environment
+venv

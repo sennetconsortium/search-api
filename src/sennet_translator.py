@@ -12,7 +12,6 @@ from yaml import safe_load
 from flask import Flask, Response
 
 # HuBMAP commons
-from hubmap_commons import globus_groups
 from hubmap_commons.hm_auth import AuthHelper
 
 sys.path.append("search-adaptor/src")
@@ -27,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 entity_properties_list = [
     'metadata',
-    'donor',
+    'source',
     'origin_sample',
     'source_sample',
     'ancestor_ids',
@@ -39,7 +38,7 @@ entity_properties_list = [
     'immediate_descendants',
     'datasets'
 ]
-entity_types = ['Upload', 'Donor', 'Sample', 'Dataset']
+entity_types = ['Source', 'Sample', 'Dataset']
 
 
 class Translator(TranslatorInterface):
@@ -50,6 +49,7 @@ class Translator(TranslatorInterface):
     INDICES = {}
     TRANSFORMERS = {}
     DEFAULT_ENTITY_API_URL = ''
+
     indexer = None
     entity_api_cache = {}
 
@@ -85,12 +85,12 @@ class Translator(TranslatorInterface):
         # Add index_version by parsing the VERSION file
         self.index_version = ((Path(__file__).absolute().parent.parent / 'VERSION').read_text()).strip()
 
-        with open(Path(__file__).resolve().parent / 'hubmap_translation' / 'neo4j-to-es-attributes.json',
+        with open(Path(__file__).resolve().parent / 'sennet_translation' / 'neo4j-to-es-attributes.json',
                   'r') as json_file:
             self.attr_map = json.load(json_file)
 
         # # Preload all the transformers
-        self.init_transformers()
+        # self.init_transformers()
 
     def translate_all(self):
         with app.app_context():
@@ -100,20 +100,19 @@ class Translator(TranslatorInterface):
                 start = time.time()
 
                 # Make calls to entity-api to get a list of uuids for each entity type
-                donor_uuids_list = get_uuids_by_entity_type("donor", self.request_headers, self.DEFAULT_ENTITY_API_URL)
+                source_uuids_list = get_uuids_by_entity_type("source", self.request_headers, self.DEFAULT_ENTITY_API_URL)
                 sample_uuids_list = get_uuids_by_entity_type("sample", self.request_headers,
                                                              self.DEFAULT_ENTITY_API_URL)
                 dataset_uuids_list = get_uuids_by_entity_type("dataset", self.request_headers,
                                                               self.DEFAULT_ENTITY_API_URL)
-                upload_uuids_list = get_uuids_by_entity_type("upload", self.request_headers,
-                                                             self.DEFAULT_ENTITY_API_URL)
+
                 public_collection_uuids_list = get_uuids_by_entity_type("collection", self.request_headers,
                                                                         self.DEFAULT_ENTITY_API_URL)
 
                 logger.debug("merging sets into a one list...")
                 # Merge into a big list that with no duplicates
                 all_entities_uuids = set(
-                    donor_uuids_list + sample_uuids_list + dataset_uuids_list + upload_uuids_list + public_collection_uuids_list)
+                    source_uuids_list + sample_uuids_list + dataset_uuids_list + public_collection_uuids_list)
 
                 es_uuids = []
                 # for index in ast.literal_eval(app.config['INDICES']).keys():
@@ -147,19 +146,17 @@ class Translator(TranslatorInterface):
                 # Reindex in multi-treading mode for:
                 # - each public collection
                 # - each upload, only add to the hm_consortium_entities index (private index of the default)
-                # - each donor and its descendants in the tree
+                # - each source and its descendants in the tree
                 futures_list = []
                 results = []
                 with concurrent.futures.ThreadPoolExecutor() as executor:
                     public_collection_futures_list = [
                         executor.submit(self.translate_public_collection, uuid, reindex=True)
                         for uuid in public_collection_uuids_list]
-                    upload_futures_list = [executor.submit(self.translate_upload, uuid, reindex=True) for uuid in
-                                           upload_uuids_list]
-                    donor_futures_list = [executor.submit(self.translate_tree, uuid) for uuid in donor_uuids_list]
+                    source_futures_list = [executor.submit(self.translate_tree, uuid) for uuid in source_uuids_list]
 
                     # Append the above three lists into one
-                    futures_list = public_collection_futures_list + upload_futures_list + donor_futures_list
+                    futures_list = public_collection_futures_list + source_futures_list
 
                     for f in concurrent.futures.as_completed(futures_list):
                         logger.debug(f.result())
@@ -182,8 +179,6 @@ class Translator(TranslatorInterface):
 
                 if entity['entity_type'] == 'Collection':
                     self.translate_public_collection(entity_id, reindex=True)
-                elif entity['entity_type'] == 'Upload':
-                    self.translate_upload(entity_id, reindex=True)
                 else:
                     previous_revision_entity_ids = []
                     next_revision_entity_ids = []
@@ -214,7 +209,7 @@ class Translator(TranslatorInterface):
                 # Clear the entity api cache
                 self.entity_api_cache.clear()
 
-                return "HuBMAP Translator.translate() finished executing"
+                return "SenNet Translator.translate() finished executing"
         except Exception:
             msg = "Exceptions during executing indexer.reindex()"
             # Log the full stack trace, prepend a line with our message
@@ -241,9 +236,9 @@ class Translator(TranslatorInterface):
             self.indexer.index(entity_id, json.dumps(document), private_index, False)
 
     # Collection doesn't actually have this `data_access_level` property
-    # This method is only applied to Donor/Sample/Dataset
+    # This method is only applied to Source/Sample/Dataset
     # For Dataset, if status=='Published', it goes into the public index
-    # For Donor/Sample, `data`if any dataset down in the tree is 'Published', they should have `data_access_level` as public,
+    # For Source/Sample, `data`if any dataset down in the tree is 'Published', they should have `data_access_level` as public,
     # then they go into public index
     # Don't confuse with `data_access_level`
     def is_public(self, document):
@@ -281,27 +276,27 @@ class Translator(TranslatorInterface):
                 self.indexer.delete_document(entity_id, private_index)
 
     # When indexing, Upload WILL NEVER BE PUBLIC
-    def translate_upload(self, entity_id, reindex=False):
-        try:
-            default_private_index = self.INDICES['indices'][self.DEFAULT_INDEX_WITHOUT_PREFIX]['private']
-
-            # Retrieve the upload entity details
-            upload = self.call_entity_api(entity_id, 'entities')
-
-            self.add_datasets_to_entity(upload)
-            self.entity_keys_rename(upload)
-
-            # Add additional calculated fields if any applies to Upload
-            self.add_calculated_fields(upload)
-
-            self.call_indexer(upload, reindex, json.dumps(upload), default_private_index)
-        except Exception as e:
-            logger.error(e)
+    # def translate_upload(self, entity_id, reindex=False):
+    #     try:
+    #         default_private_index = self.INDICES['indices'][self.DEFAULT_INDEX_WITHOUT_PREFIX]['private']
+    #
+    #         # Retrieve the upload entity details
+    #         upload = self.call_entity_api(entity_id, 'entities')
+    #
+    #         self.add_datasets_to_entity(upload)
+    #         self.entity_keys_rename(upload)
+    #
+    #         # Add additional calculated fields if any applies to Upload
+    #         self.add_calculated_fields(upload)
+    #
+    #         self.call_indexer(upload, reindex, json.dumps(upload), default_private_index)
+    #     except Exception as e:
+    #         logger.error(e)
 
     def translate_public_collection(self, entity_id, reindex=False):
         try:
             # The entity-api returns public collection with a list of connected public/published datasets, for either
-            # - a valid token but not in HuBMAP-Read group or
+            # - a valid token but not in Globus Read group or
             # - no token at all
             # Here we do NOT send over the token
             try:
@@ -310,7 +305,7 @@ class Translator(TranslatorInterface):
                 logger.exception(e)
                 # Stop running
 
-                msg = "HubMAP Translator.translate_public_collection() failed to get public collection of uuid: {entity_id} via entity-api"
+                msg = "SenNet Translator.translate_public_collection() failed to get public collection of uuid: {entity_id} via entity-api"
                 logger.error(msg)
                 sys.exit(msg)
 
@@ -343,47 +338,49 @@ class Translator(TranslatorInterface):
         try:
             # logger.info(f"Total threads count: {threading.active_count()}")
 
-            logger.info(f"Executing index_tree() for donor of uuid: {entity_id}")
+            logger.info(f"Executing index_tree() for source of uuid: {entity_id}")
 
             descendant_uuids = self.call_entity_api(entity_id, 'descendants', 'uuid')
 
-            # Index the donor entity itself separately
-            donor = self.call_entity_api(entity_id, 'entities')
+            # Index the source entity itself separately
+            source = self.call_entity_api(entity_id, 'entities')
 
-            self.call_indexer(donor)
+            self.call_indexer(source)
 
-            # Index all the descendants of this donor
+            # Index all the descendants of this source
             for descendant_uuid in descendant_uuids:
                 # Retrieve the entity details
                 descendant = self.call_entity_api(descendant_uuid, 'entities')
 
                 self.call_indexer(descendant)
 
-            msg = f"indexer.index_tree() finished executing for donor of uuid: {entity_id}"
+            msg = f"indexer.index_tree() finished executing for source of uuid: {entity_id}"
             logger.info(msg)
             return msg
         except Exception as e:
             logger.error(e)
 
-    def init_transformers(self):
-        for index in self.indices.keys():
-            try:
-                xform_module = self.INDICES['indices'][index]['transform']['module']
+    #TODO: Delete later
 
-                logger.info(f"Transform module to be dynamically imported: {xform_module} at time: {time.time()}")
-
-                try:
-                    m = importlib.import_module(xform_module)
-                    self.TRANSFORMERS[index] = m
-                except Exception as e:
-                    logger.error(e)
-                    msg = f"Failed to dynamically import transform module index: {index} at time: {time.time()}"
-                    logger.exception(msg)
-            except KeyError as e:
-                logger.info(f'No transform or transform module specified in the search-config.yaml for index: {index}')
-
-        logger.debug("========Preloaded transformers===========")
-        logger.debug(self.TRANSFORMERS)
+    # def init_transformers(self):
+    #     for index in self.indices.keys():
+    #         try:
+    #             xform_module = self.INDICES['indices'][index]['transform']['module']
+    #
+    #             logger.info(f"Transform module to be dynamically imported: {xform_module} at time: {time.time()}")
+    #
+    #             try:
+    #                 m = importlib.import_module(xform_module)
+    #                 self.TRANSFORMERS[index] = m
+    #             except Exception as e:
+    #                 logger.error(e)
+    #                 msg = f"Failed to dynamically import transform module index: {index} at time: {time.time()}"
+    #                 logger.exception(msg)
+    #         except KeyError as e:
+    #             logger.info(f'No transform or transform module specified in the search-config.yaml for index: {index}')
+    #
+    #     logger.debug("========Preloaded transformers===========")
+    #     logger.debug(self.TRANSFORMERS)
 
     def init_auth_helper(self):
         if AuthHelper.isInitialized() == False:
@@ -414,10 +411,10 @@ class Translator(TranslatorInterface):
 
             if target_index:
                 self.indexer.index(entity['uuid'], document, target_index, reindex)
-            elif entity['entity_type'] == 'Upload':
-                target_index = self.INDICES['indices'][self.DEFAULT_INDEX_WITHOUT_PREFIX]['private']
-
-                self.indexer.index(entity['uuid'], document, target_index, reindex)
+            # elif entity['entity_type'] == 'Upload':
+            #     target_index = self.INDICES['indices'][self.DEFAULT_INDEX_WITHOUT_PREFIX]['private']
+            #
+            #     self.indexer.index(entity['uuid'], document, target_index, reindex)
             else:
                 # write entity into indices
                 for index in self.indices.keys():
@@ -448,7 +445,7 @@ class Translator(TranslatorInterface):
 
                     self.indexer.index(entity['uuid'], target_doc, private_index, reindex)
         except Exception:
-            msg = f"Exception encountered during executing HuBMAPTranslator call_indexer() for uuid: {org_node['uuid']}, entity_type: {org_node['entity_type']}"
+            msg = f"Exception encountered during executing Translator call_indexer() for uuid: {org_node['uuid']}, entity_type: {org_node['entity_type']}"
             # Log the full stack trace, prepend a line with our message
             logger.exception(msg)
 
@@ -466,7 +463,7 @@ class Translator(TranslatorInterface):
                 dataset_doc.pop('descendant_ids')
                 dataset_doc.pop('immediate_descendants')
                 dataset_doc.pop('immediate_ancestors')
-                dataset_doc.pop('donor')
+                dataset_doc.pop('source')
                 dataset_doc.pop('origin_sample')
                 dataset_doc.pop('source_sample')
 
@@ -498,7 +495,8 @@ class Translator(TranslatorInterface):
                     temp_val = entity[key]
 
                 temp[self.attr_map['ENTITY'][key]['es_name']] = temp_val
-
+        print(f"This is temp {temp}")
+        sys.exit(0)
         for key in to_delete_keys:
             if key not in entity_properties_list:
                 entity.pop(key)
@@ -518,11 +516,11 @@ class Translator(TranslatorInterface):
         if entity['entity_type'] in entity_types:
             entity['display_subtype'] = self.generate_display_subtype(entity)
 
-    # For Upload, Dataset, Donor and Sample objects:
+    # For Upload, Dataset, Source and Sample objects:
     # add a calculated (not stored in Neo4j) field called `display_subtype` to
     # all Elasticsearch documents of the above types with the following rules:
     # Upload: Just make it "Data Upload" for all uploads
-    # Donor: "Donor"
+    # Source: "Source"
     # Sample: if specimen_type == 'organ' the display name linked to the corresponding description of organ code
     # otherwise the display name linked to the value of the corresponding description of specimen_type code
     # Dataset: the display names linked to the values in data_types as a comma separated list
@@ -530,10 +528,8 @@ class Translator(TranslatorInterface):
         entity_type = entity['entity_type']
         display_subtype = '{unknown}'
 
-        if entity_type == 'Upload':
-            display_subtype = 'Data Upload'
-        elif entity_type == 'Donor':
-            display_subtype = 'Donor'
+        if entity_type == 'Source':
+            display_subtype = 'Source'
         elif entity_type == 'Sample':
             if 'specimen_type' in entity:
                 if entity['specimen_type'].lower() == 'organ':
@@ -554,7 +550,7 @@ class Translator(TranslatorInterface):
         else:
             # Do nothing
             logger.error(
-                f"Invalid entity_type: {entity_type}. Only generate display_subtype for Upload/Donor/Sample/Dataset")
+                f"Invalid entity_type: {entity_type}. Only generate display_subtype for Source/Sample/Dataset")
 
         return display_subtype
 
@@ -580,11 +576,11 @@ class Translator(TranslatorInterface):
                     # Add to the list
                     ancestors.append(ancestor_dict)
 
-                # Find the Donor
-                donor = None
+                # Find the Source
+                source = None
                 for a in ancestors:
-                    if a['entity_type'] == 'Donor':
-                        donor = copy.copy(a)
+                    if a['entity_type'] == 'Source':
+                        source = copy.copy(a)
                         break
 
                 descendant_ids = self.call_entity_api(entity_id, 'descendants', 'uuid')
@@ -613,7 +609,7 @@ class Translator(TranslatorInterface):
             # The origin_sample is the sample that `specimen_type` is "organ" and the `organ` code is set at the same time
             if entity['entity_type'] in ['Sample', 'Dataset']:
                 # Add new properties
-                entity['donor'] = donor
+                entity['source'] = source
 
                 entity['origin_sample'] = copy.copy(entity) if ('specimen_type' in entity) and (
                         entity['specimen_type'].lower() == 'organ') and ('organ' in entity) and (
@@ -661,7 +657,7 @@ class Translator(TranslatorInterface):
                 group_uuid = entity['group_uuid']
 
                 # Get the globus groups info based on the groups json file in commons package
-                globus_groups_info = globus_groups.get_globus_groups_info()
+                globus_groups_info = self.auth_helper_instance.get_globus_groups_info()
                 groups_by_id_dict = globus_groups_info['by_id']
                 group_dict = groups_by_id_dict[group_uuid]
 
@@ -674,8 +670,8 @@ class Translator(TranslatorInterface):
                 entity['metadata'].pop('files')
 
             # Rename for properties that are objects
-            if entity.get('donor', None):
-                self.entity_keys_rename(entity['donor'])
+            if entity.get('source', None):
+                self.entity_keys_rename(entity['source'])
             if entity.get('origin_sample', None):
                 self.entity_keys_rename(entity['origin_sample'])
             if entity.get('source_sample', None):
@@ -749,7 +745,7 @@ class Translator(TranslatorInterface):
                 logger.exception(e)
 
                 # Stop running
-                msg = f"HuBMAP translator failed to reach: " + url + ". Response: " + response.json()
+                msg = f"SenNet translator failed to reach: " + url + ". Response: " + response.json()
                 logger.error(msg)
                 sys.exit(msg)
 
@@ -759,22 +755,22 @@ class Translator(TranslatorInterface):
 
     def get_public_collection(self, entity_id):
         # The entity-api returns public collection with a list of connected public/published datasets, for either
-        # - a valid token but not in HuBMAP-Read group or
+        # - a valid token but not in Globus Read group or
         # - no token at all
         # Here we do NOT send over the token
         url = self.entity_api_url + "/collections/" + entity_id
         response = requests.get(url, headers=self.request_headers, verify=False)
 
         if response.status_code != 200:
-            msg = "HuBMAP translator get_collection() failed to get public collection of uuid: " + entity_id + " via entity-api"
+            msg = "SenNet translator get_collection() failed to get public collection of uuid: " + entity_id + " via entity-api"
 
             # Log the full stack trace, prepend a line with our message
             logger.exception(msg)
 
-            logger.debug("======get_public_collection() status code from hubmap_translator======")
+            logger.debug("======get_public_collection() status code from sennet_translator======")
             logger.debug(response.status_code)
 
-            logger.debug("======get_public_collection() response text from hubmap_translator-api======")
+            logger.debug("======get_public_collection() response text from sennet_translator-api======")
             logger.debug(response.text)
 
             # Bubble up the error message from entity-api instead of sys.exit(msg)
@@ -862,10 +858,10 @@ if __name__ == "__main__":
     # Use the new key rather than the 'hmgroupids' which will be deprecated
     group_ids = user_info_dict['group_membership_ids']
 
-    # Ensure the user belongs to the HuBMAP-Data-Admin group
-    # TODO: Need to generalize this once HuBMAP authorization is updated
-    if not user_belongs_to_data_admin_group(group_ids, app.config['GLOBUS_HUBMAP_DATA_ADMIN_GROUP_UUID']):
-        msg = "The given token doesn't belong to the HuBMAP-Data-Admin group, access not granted"
+    # Ensure the user belongs to the Globus Data Admin group
+    # TODO: Need to generalize this once authorization is updated
+    if not user_belongs_to_data_admin_group(group_ids, app.config['GLOBUS_DATA_ADMIN_GROUP_UUID']):
+        msg = "The given token doesn't belong to the Globus Data Admin group, access not granted"
         # Log the full stack trace, prepend a line with our message
         logger.exception(msg)
         sys.exit(msg)
