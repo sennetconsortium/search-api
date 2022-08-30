@@ -24,7 +24,6 @@ config['DEFAULT_ENTITY_API_URL'] = config['INDICES']['indices'][config['DEFAULT_
 
 config['GLOBUS_READ_GROUP_UUID'] = app.config['GLOBUS_READ_GROUP_UUID']
 config['GLOBUS_DATA_ADMIN_GROUP_UUID'] = app.config['GLOBUS_DATA_ADMIN_GROUP_UUID']
-config['SECURE_GROUP'] = app.config['SECURE_GROUP']
 config['GROUP_ID'] = 'group_membership_ids'
 
 config['APP_CLIENT_ID'] = app.config['APP_CLIENT_ID']
