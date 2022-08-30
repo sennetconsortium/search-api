@@ -8,7 +8,6 @@ import sys
 import time
 from yaml import safe_load
 
-# For reusing the app.cfg configuration when running indexer_base.py as script
 from flask import Flask, Response
 
 # HuBMAP commons
@@ -85,9 +84,6 @@ class Translator(TranslatorInterface):
         # Add index_version by parsing the VERSION file
         self.index_version = ((Path(__file__).absolute().parent.parent / 'VERSION').read_text()).strip()
 
-        with open(Path(__file__).resolve().parent / 'sennet_translation' / 'neo4j-to-es-attributes.json',
-                  'r') as json_file:
-            self.attr_map = json.load(json_file)
 
         # # Preload all the transformers
         # self.init_transformers()
@@ -284,7 +280,6 @@ class Translator(TranslatorInterface):
     #         upload = self.call_entity_api(entity_id, 'entities')
     #
     #         self.add_datasets_to_entity(upload)
-    #         self.entity_keys_rename(upload)
     #
     #         # Add additional calculated fields if any applies to Upload
     #         self.add_calculated_fields(upload)
@@ -310,7 +305,6 @@ class Translator(TranslatorInterface):
                 sys.exit(msg)
 
             self.add_datasets_to_entity(collection)
-            self.entity_keys_rename(collection)
 
             # Add additional calculated fields if any applies to Collection
             self.add_calculated_fields(collection)
@@ -471,40 +465,6 @@ class Translator(TranslatorInterface):
 
         entity['datasets'] = datasets
 
-    def entity_keys_rename(self, entity):
-        # logger.debug("==================entity before renaming keys==================")
-        # logger.debug(entity)
-
-        to_delete_keys = []
-        temp = {}
-
-        for key in entity:
-            to_delete_keys.append(key)
-            if key in self.attr_map['ENTITY']:
-                # Special case of Sample.rui_location
-                # To be backward compatible for API clients relying on the old version
-                # Also gives the ES consumer flexibility to change the inner structure
-                # Note: when `rui_location` is stored as json object (Python dict) in ES
-                # with the default dynamic mapping, it can cause errors due to
-                # the changing data types of some internal fields
-                # isinstance() check is to avoid json.dumps() on json string again
-                if (key == 'rui_location') and isinstance(entity[key], dict):
-                    # Convert Python dict to json string
-                    temp_val = json.dumps(entity[key])
-                else:
-                    temp_val = entity[key]
-
-                temp[self.attr_map['ENTITY'][key]['es_name']] = temp_val
-        print(f"This is temp {temp}")
-        # sys.exit(0)
-        for key in to_delete_keys:
-            if key not in entity_properties_list:
-                entity.pop(key)
-
-        entity.update(temp)
-
-        # logger.debug("==================entity after renaming keys==================")
-        # logger.debug(entity)
 
     # These calculated fields are not stored in neo4j but will be generated
     # and added to the ES
@@ -521,8 +481,8 @@ class Translator(TranslatorInterface):
     # all Elasticsearch documents of the above types with the following rules:
     # Upload: Just make it "Data Upload" for all uploads
     # Source: "Source"
-    # Sample: if specimen_type == 'organ' the display name linked to the corresponding description of organ code
-    # otherwise the display name linked to the value of the corresponding description of specimen_type code
+    # Sample: if sample_category == 'organ' the display name linked to the corresponding description of organ code
+    # otherwise the display name linked to the value of the corresponding description of sample_category code
     # Dataset: the display names linked to the values in data_types as a comma separated list
     def generate_display_subtype(self, entity):
         entity_type = entity['entity_type']
@@ -531,17 +491,17 @@ class Translator(TranslatorInterface):
         if entity_type == 'Source':
             display_subtype = 'Source'
         elif entity_type == 'Sample':
-            if 'specimen_type' in entity:
-                if entity['specimen_type'].lower() == 'organ':
+            if 'sample_category' in entity:
+                if entity['sample_category'].lower() == 'organ':
                     if 'organ' in entity:
                         display_subtype = get_type_description(entity['organ'], 'organ_types')
                     else:
                         logger.error(
-                            f"Missing missing organ when specimen_type is set of Sample with uuid: {entity['uuid']}")
+                            f"Missing missing organ when sample_category is set of Sample with uuid: {entity['uuid']}")
                 else:
-                    display_subtype = get_type_description(entity['specimen_type'], 'tissue_sample_types')
+                    display_subtype = get_type_description(entity['sample_category'], 'tissue_sample_types')
             else:
-                logger.error(f"Missing specimen_type of Sample with uuid: {entity['uuid']}")
+                logger.error(f"Missing sample_category of Sample with uuid: {entity['uuid']}")
         elif entity_type == 'Dataset':
             if 'data_types' in entity:
                 display_subtype = ','.join(entity['data_types'])
@@ -606,20 +566,20 @@ class Translator(TranslatorInterface):
                 entity['immediate_ancestors'] = immediate_ancestors
                 entity['immediate_descendants'] = immediate_descendants
 
-            # The origin_sample is the sample that `specimen_type` is "organ" and the `organ` code is set at the same time
+            # The origin_sample is the sample that `sample_category` is "organ" and the `organ` code is set at the same time
             if entity['entity_type'] in ['Sample', 'Dataset']:
                 # Add new properties
                 entity['source'] = source
 
-                entity['origin_sample'] = copy.copy(entity) if ('specimen_type' in entity) and (
-                        entity['specimen_type'].lower() == 'organ') and ('organ' in entity) and (
+                entity['origin_sample'] = copy.copy(entity) if ('sample_category' in entity) and (
+                        entity['sample_category'].lower() == 'organ') and ('organ' in entity) and (
                                                                        entity['organ'].strip() != '') else None
 
                 if entity['origin_sample'] is None:
                     try:
-                        # The origin_sample is the ancestor which `specimen_type` is "organ" and the `organ` code is set
-                        entity['origin_sample'] = copy.copy(next(a for a in ancestors if ('specimen_type' in a) and (
-                                a['specimen_type'].lower() == 'organ') and ('organ' in a) and (
+                        # The origin_sample is the ancestor which `sample_category` is "organ" and the `organ` code is set
+                        entity['origin_sample'] = copy.copy(next(a for a in ancestors if ('sample_category' in a) and (
+                                a['sample_category'].lower() == 'organ') and ('organ' in a) and (
                                                                          a['organ'].strip() != '')))
                     except StopIteration:
                         entity['origin_sample'] = {}
@@ -649,7 +609,6 @@ class Translator(TranslatorInterface):
                         if 'files' in ingest_metadata:
                             entity['files'] = ingest_metadata['files']
 
-            self.entity_keys_rename(entity)
 
             # Is group_uuid always set?
             # In case if group_name not set
@@ -669,26 +628,6 @@ class Translator(TranslatorInterface):
             if ('metadata' in entity) and ('files' in entity['metadata']):
                 entity['metadata'].pop('files')
 
-            # Rename for properties that are objects
-            if entity.get('source', None):
-                self.entity_keys_rename(entity['source'])
-            if entity.get('origin_sample', None):
-                self.entity_keys_rename(entity['origin_sample'])
-            if entity.get('source_sample', None):
-                for s in entity.get('source_sample', None):
-                    self.entity_keys_rename(s)
-            if entity.get('ancestors', None):
-                for a in entity.get('ancestors', None):
-                    self.entity_keys_rename(a)
-            if entity.get('descendants', None):
-                for d in entity.get('descendants', None):
-                    self.entity_keys_rename(d)
-            if entity.get('immediate_descendants', None):
-                for parent in entity.get('immediate_descendants', None):
-                    self.entity_keys_rename(parent)
-            if entity.get('immediate_ancestors', None):
-                for child in entity.get('immediate_ancestors', None):
-                    self.entity_keys_rename(child)
 
             remove_specific_key_entry(entity, "other_metadata")
 
@@ -823,7 +762,6 @@ class Translator(TranslatorInterface):
             logger.exception(msg)
 
 
-# Running indexer_base.py as a script in command line
 # This approach is different from the live reindex via HTTP request
 # It'll delete all the existing indices and recreate then then index everything
 if __name__ == "__main__":

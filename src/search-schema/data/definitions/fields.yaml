@@ -166,7 +166,7 @@ name:
   enum: null
   required: Depends on entity type
 organ:
-  description: The organ type when specimen_type == organ.
+  description: The organ type when sample_category == organ.
   entity_types:
   - sample
   enum: organ_types
@@ -214,6 +214,19 @@ rui_location:
   description: Location information of where the tissue sample came from in the
     organ that the tissue was sourced from.  Specified in JSON, as outputed from
     the RUI tool.
+  entity_types:
+  - sample
+  enum: null
+  required: false
+sample_category:
+  description: For Sample entities, the type of tissue specimen.
+  entity_types:
+  - sample
+  enum: tissue_sample_types
+  required: true
+sample_category_other:
+  description: If sample_category == other, the specimen type name is specified in
+    this field
   entity_types:
   - sample
   enum: null

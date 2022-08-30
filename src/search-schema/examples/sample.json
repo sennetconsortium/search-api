@@ -18,7 +18,7 @@
       "group_uuid": "def5fd76-ed43-11e8-b56a-0e8017bdda58",
       "hubmap_display_id": "STAN0003-SI-1",
       "last_modified_timestamp": 1572559158389,
-      "specimen_type": "organ_piece",
+      "sample_category": "organ_piece",
       "uuid": "bf1db74f40506e87055eda7b84a79174"
     },
     {
@@ -42,7 +42,7 @@
         }
       ],
       "portal_uploaded_image_files": [],
-      "specimen_type": "organ",
+      "sample_category": "organ",
       "uuid": "eed96170f42554db84d97d1652bb23ef"
     },
     {
@@ -126,9 +126,9 @@
       }
     ],
     "portal_uploaded_image_files": [],
-    "specimen_type": "organ",
+    "sample_category": "organ",
     "uuid": "eed96170f42554db84d97d1652bb23ef"
   },
-  "specimen_type": "flash_frozen_liquid_nitrogen",
+  "sample_category": "flash_frozen_liquid_nitrogen",
   "uuid": "2b5b0b33efe54dfe6c4de631f7be13a2"
 }
