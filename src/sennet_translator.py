@@ -77,7 +77,7 @@ class Translator(TranslatorInterface):
         self.app_client_secret = app_client_secret
         self.token = token
 
-        auth_helper = self.init_auth_helper()
+        self.auth_helper = self.init_auth_helper()
         self.request_headers = self.create_request_headers_for_auth(token)
 
         self.entity_api_url = self.indices[self.DEFAULT_INDEX_WITHOUT_PREFIX]['document_source_endpoint'].strip('/')
@@ -496,7 +496,7 @@ class Translator(TranslatorInterface):
 
                 temp[self.attr_map['ENTITY'][key]['es_name']] = temp_val
         print(f"This is temp {temp}")
-        sys.exit(0)
+        # sys.exit(0)
         for key in to_delete_keys:
             if key not in entity_properties_list:
                 entity.pop(key)
@@ -657,7 +657,7 @@ class Translator(TranslatorInterface):
                 group_uuid = entity['group_uuid']
 
                 # Get the globus groups info based on the groups json file in commons package
-                globus_groups_info = self.auth_helper_instance.get_globus_groups_info()
+                globus_groups_info = self.auth_helper.get_globus_groups_info()
                 groups_by_id_dict = globus_groups_info['by_id']
                 group_dict = groups_by_id_dict[group_uuid]
 
