@@ -22,8 +22,6 @@ config['DEFAULT_INDEX_WITHOUT_PREFIX'] = config['INDICES']['default_index']
 config['DEFAULT_ELASTICSEARCH_URL'] = config['INDICES']['indices'][config['DEFAULT_INDEX_WITHOUT_PREFIX']]['elasticsearch']['url'].strip('/')
 config['DEFAULT_ENTITY_API_URL'] = config['INDICES']['indices'][config['DEFAULT_INDEX_WITHOUT_PREFIX']]['document_source_endpoint'].strip('/')
 
-config['GLOBUS_READ_GROUP_UUID'] = app.config['GLOBUS_READ_GROUP_UUID']
-config['GLOBUS_DATA_ADMIN_GROUP_UUID'] = app.config['GLOBUS_DATA_ADMIN_GROUP_UUID']
 config['GROUP_ID'] = 'group_membership_ids'
 
 config['APP_CLIENT_ID'] = app.config['APP_CLIENT_ID']
