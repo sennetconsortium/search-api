@@ -1,7 +1,7 @@
 {
   "ENTITY": {
-    "hubmap_id": {
-      "es_name": "hubmap_id"
+    "sennet_id": {
+      "es_name": "sennet_id"
     },
     "entity_type": {
       "es_name": "entity_type"
@@ -152,6 +152,15 @@
     },
     "tissue_type": {
       "es_name": "tissue_type"
+    },
+    "source_type": {
+      "es_name": "source_type"
+    },
+    "lab_source_id": {
+      "es_name": "lab_source_id"
+    },
+    "sample_category": {
+      "es_name": "sample_category"
     }
   }
 }

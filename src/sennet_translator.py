@@ -36,7 +36,11 @@ entity_properties_list = [
     'files',
     'immediate_ancestors',
     'immediate_descendants',
-    'datasets'
+    'datasets',
+    'sennet_id',
+    'source_type',
+    'lab_source_id',
+    'sample_category'
 ]
 entity_types = ['Source', 'Sample', 'Dataset']
 
@@ -495,8 +499,7 @@ class Translator(TranslatorInterface):
                     temp_val = entity[key]
 
                 temp[self.attr_map['ENTITY'][key]['es_name']] = temp_val
-        print(f"This is temp {temp}")
-        # sys.exit(0)
+        print(f"This is temp {json.dumps(temp, indent=4)}")
         for key in to_delete_keys:
             if key not in entity_properties_list:
                 entity.pop(key)
