@@ -21,7 +21,7 @@
       "last_modified_timestamp": 1576876531656,
       "portal_metadata_upload_files": [],
       "portal_uploaded_image_files": [],
-      "specimen_type": "organ_piece",
+      "sample_category": "organ_piece",
       "uuid": "c1f0cc0152231ce6276475b3ea800aab"
     },
     {
@@ -46,7 +46,7 @@
         }
       ],
       "portal_uploaded_image_files": [],
-      "specimen_type": "organ",
+      "sample_category": "organ",
       "uuid": "36d34bbfc026545aeac0c5acd47f3f91"
     },
     {
@@ -122,7 +122,7 @@
     "lab_tissue_sample_id": "W101 spleen, central",
     "last_modified_timestamp": 1571148594392,
     "organ": "SP",
-    "specimen_type": "organ",
+    "sample_category": "organ",
     "uuid": "d8204a70984bab4669121de9b9388e1d"
   },
   "source_sample": [
@@ -141,7 +141,7 @@
       "last_modified_timestamp": 1576876531656,
       "portal_metadata_upload_files": [],
       "portal_uploaded_image_files": [],
-      "specimen_type": "organ_piece",
+      "sample_category": "organ_piece",
       "uuid": "c1f0cc0152231ce6276475b3ea800aab"
     }
   ],
