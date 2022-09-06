@@ -677,16 +677,20 @@ class Translator(TranslatorInterface):
 
         response = requests.get(url, headers=self.request_headers, verify=False)
         if response.status_code != 200:
-            # See if this uuid is a public Collection instead before exiting
-            try:
-                return self.get_public_collection(entity_id)
-            except requests.exceptions.RequestException as e:
-                logger.exception(e)
+            msg = f"SenNet translator call_entity_api() failed to get entity of uuid {entity_id} via entity-api"
+            # Log the full stack trace, prepend a line with our message
+            logger.exception(msg)
 
-                # Stop running
-                msg = f"SenNet translator failed to reach: " + url + ". Response: " + response.json()
-                logger.error(msg)
-                sys.exit(msg)
+            logger.debug("======call_entity_api() status code from entity-api======")
+            logger.debug(response.status_code)
+
+            logger.debug("======call_entity_api() response text from entity-api======")
+            logger.debug(response.text)
+
+            # Bubble up the error message from entity-api instead of sys.exit(msg)
+            # The caller will need to handle this exception
+            response.raise_for_status()
+            raise requests.exceptions.RequestException(response.text)
 
         self.entity_api_cache[url] = response.json()
 
