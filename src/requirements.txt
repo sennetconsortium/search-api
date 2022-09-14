@@ -3,7 +3,7 @@ urllib3==1.26.5
 jsonschema==3.2.0
 
 # The commons package requires requests>=2.22.0 and PyYAML>=5.3.1
-requests==2.25.1
+requests==2.27.1
 PyYAML==5.4.1
 
 # Use the published package from PyPI as default
@@ -11,3 +11,6 @@ PyYAML==5.4.1
 # Default is main branch specified in search-api's docker-compose.development.yml if not set
 git+https://github.com/hubmapconsortium/commons.git@shirey/refactor-mult-apps#egg=hubmap-commons
 #hubmap-commons==2.0.15
+
+# The use of `-r` lets us specify the transitive requirements in one place
+-r search-adaptor/src/requirements.txt
