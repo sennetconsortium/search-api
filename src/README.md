@@ -5,7 +5,7 @@
 When running this indexer as a Python script, it will delete all the existing indices and recreate them then index everything. And it requires to have all the dependencies installed already. Below is the command to run within the search-api container under the source code directory `/usr/src/app/src` (either mounted or copied):
 
 ````
-python3 -m hubmap_translator <globus-nexus-token>
+python3 -m hubmap_translator <globus-groups-token>
 ````
 
 This approach uses the same configuration file `src/instance/app.cfg` so make sure it exists.
