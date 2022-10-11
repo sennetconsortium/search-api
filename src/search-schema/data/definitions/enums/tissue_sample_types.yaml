@@ -90,3 +90,5 @@ tissue_lysate:
   description: Tissue lysate
 wgs:
   description: Whole genome sequencing
+block:
+  description: Block
