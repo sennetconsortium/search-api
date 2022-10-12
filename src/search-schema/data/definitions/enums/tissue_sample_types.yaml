@@ -92,3 +92,9 @@ wgs:
   description: Whole genome sequencing
 block:
   description: Block
+section:
+  description: Section
+suspension:
+  description: Suspension
+bodily_fluid:
+  description: Bodily Fluid
