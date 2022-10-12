@@ -96,5 +96,7 @@ section:
   description: Section
 suspension:
   description: Suspension
-bodily_fluid:
+bodily fluid:
   description: Bodily Fluid
+organ piece:
+  description: Organ Piece
