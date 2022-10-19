@@ -14,27 +14,6 @@ git submodule update --init --remote
 
 ## Development process
 
-### Portal index
-
-Front end developers who need to work on the `portal` index should start in
-[the `addl_index_transformations/portal` subdirectory](https://github.com/hubmapconsortium/search-api/tree/main/hubmap-translation/src/hubmap_translation/addl_index_transformations/portal);
-You don't need to read the rest of this page.
-
-### Local development
-After checking out the repo, installing the dependencies,
-and starting a local Elasticsearch instance, tests should pass:
-```shell
-pip install -r src/requirements.txt
-pip install -r src/requirements-dev.txt
-
-# on mac:
-brew tap elastic/tap
-brew install elastic/tap/elasticsearch-full
-elasticsearch &  # Wait for it to start...
-
-./test.sh
-```
-
 ### To release via TEST infrastructure
 - Make new feature or bug fix branches from `main` branch (the default branch)
 - Make PRs to `main`
@@ -60,8 +39,6 @@ Nils likes to review the descriptions here, so he is listed as a "[code owner](h
 The search-api base URL for each deployment environment:
 
 - DEV: `https://search-api.dev.sennetconsortium.org`
-- TEST: `https://search-api.test.sennetconsortium.org`
-- STAGE: `https://search-api.stage.sennetconsortium.org`
 - PROD: `https://search.api.sennetconsortium.org`
 
 ## Request endpoints
@@ -237,13 +214,13 @@ If you have multiple indices you need to specify which of these is the default. 
 There are a few configurable environment variables to keep in mind:
 
 - `COMMONS_BRANCH`: build argument only to be used during image creation when we need to use a branch of commons from github rather than the published PyPI package. Default to master branch if not set or null.
-- `HOST_UID`: the user id on the host machine to be mapped to the container. Default to 1000 if not set or null.
-- `HOST_GID`: the user's group id on the host machine to be mapped to the container. Default to 1000 if not set or null.
+- `HOST_UID`: the user id on the host machine to be mapped to the container. Default to 1001 if not set or null.
+- `HOST_GID`: the user's group id on the host machine to be mapped to the container. Default to 1001 if not set or null.
 
 We can set and verify the environment variable like below:
 
 ````
-export COMMONS_BRANCH=master
+export COMMONS_BRANCH=main
 echo $COMMONS_BRANCH
 ````
 
@@ -254,11 +231,10 @@ cd docker
 ./docker-development.sh [check|config|build|start|stop|down]
 ```
 
-## Docker build for deployment on TEST/STAGE/PROD
+## Docker build for deployment on PROD
 
 ```
 cd docker
-export SEARCH_API_VERSION=a.b.c (replace with the actual released version number)
 ./docker-deployment.sh [start|stop|down]
 ```
 
