@@ -4,10 +4,11 @@
 # These IRIs are different than those at
 # https://github.com/hubmapconsortium/portal-ui/blob/main/organ-utils/descriptions.yaml
 # There, "Right Kidney" and "Left Kidney" are just represented by "Kidney".
-# Here, they are kept distinct. 
+# Here, they are kept distinct.
 
-# TODO: Add IRIs for all organs. 
-
+# TODO: Add IRIs for all organs.
+AD:
+  description: Adipose
 AO:
   description: Aorta
 BL:
@@ -19,6 +20,8 @@ BM:
 BR:
   description: Brain
   iri: http://purl.obolibrary.org/obo/UBERON_0000955
+BS:
+  description: Breast
 LF:
   description: Fallopian Tube (Left)
 RF:
@@ -48,6 +51,8 @@ LY:
   iri: http://purl.obolibrary.org/obo/UBERON_0000029
 LO:
   description: Ovary (Left)
+MU:
+  description: Muscle
 RO:
   description: Ovary (Right)
 OT:
