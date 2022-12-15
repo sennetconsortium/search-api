@@ -489,7 +489,7 @@ class Translator(TranslatorInterface):
         display_subtype = '{unknown}'
 
         if entity_type == 'Source':
-            display_subtype = 'Source'
+            display_subtype = entity['source_type']
         elif entity_type == 'Sample':
             if 'sample_category' in entity:
                 if entity['sample_category'].lower() == 'organ':
