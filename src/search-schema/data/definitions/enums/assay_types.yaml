@@ -1,10 +1,13 @@
 Bulk RNA-seq:
     description: Bulk RNA-seq
+    alt-names: [ ]
     primary: true
     contains-pii: true
     vitessce-hints: []
 CITE-seq:
     description: CITE-seq
+    alt-names: [ ]
+    primary: true
 CODEX:
     description: CODEX
     alt-names: []
@@ -13,12 +16,20 @@ CODEX:
     vitessce-hints: []
 CosMX - RNA:
     description: CosMX - RNA
+    alt-names: [ ]
+    primary: true
 DBiT-seq:
     description: DBiT-seq
+    alt-names: [ ]
+    primary: true
 FACS - Fluorescence-activated Cell Sorting:
     description: FACS - Fluorescence-activated Cell Sorting
+    alt-names: [ ]
+    primary: true
 GeoMX - RNA:
     description: GeoMX - RNA
+    alt-names: [ ]
+    primary: true
 LC-MS:
     description: LC-MS
     alt-names: []
@@ -33,6 +44,8 @@ MIBI:
   vitessce-hints: []
 Mint-ChIP:
     description: Mint-ChIP
+    alt-names: [ ]
+    primary: true
 Multiplexed:
     description: Multiplexed
     alt-names: []
@@ -41,8 +54,12 @@ Multiplexed:
     vitessce-hints: []
 Other:
     description: Other
+    alt-names: [ ]
+    primary: true
 SASP:
     description: SASP
+    alt-names: [ ]
+    primary: true
 scRNA-seq:
     description: scRNA-seq
     alt-names: []
@@ -63,7 +80,11 @@ snRNA-seq:
     vitessce-hints: []
 Stained Slides:
   description: Stained Slides
+  alt-names: [ ]
+  primary: true
 Visium:
   description: Visium
+  alt-names: [ ]
+  primary: true
 
 
