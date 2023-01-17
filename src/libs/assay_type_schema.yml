@@ -1,5 +1,5 @@
 '$schema': 'http://json-schema.org/schema#'
-'$id': 'http://schemata.hubmapconsortium.org/assay_type_schema.yml'
+'$id': 'http://schemata.sennetconsortium.org/assay_type_schema.yml'
 'title': 'assay type schema'
 'description': 'schema for assay type information'
 

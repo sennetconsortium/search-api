@@ -24,7 +24,7 @@ DEFINITION_PATH = (Path(__file__).resolve().parent.parent
                    / 'definitions' / 'enums' / 'assay_types.yaml')
 
 SCHEMA_PATH = (Path(__file__).resolve().parent) / 'assay_type_schema.yml'
-SCHEMA_BASE_URI = 'http://schemata.hubmapconsortium.org/'
+SCHEMA_BASE_URI = 'http://schemata.sennetconsortium.org/'
 
 
 class AssayType(object):
@@ -191,6 +191,6 @@ class AssayType(object):
 def main() -> None:
     import doctest
     doctest.testmod()
-    
+
 if __name__ == '__main__':
     main()
