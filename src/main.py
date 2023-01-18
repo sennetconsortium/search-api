@@ -7,6 +7,7 @@ from flask import Flask
 from yaml import safe_load
 
 sys.path.append("search-adaptor/src")
+import libs.sennet_endpoints
 search_adaptor_module = importlib.import_module("app", "search-adaptor/src")
 
 config = {}
@@ -29,8 +30,10 @@ translator_module = importlib.import_module("sennet_translator")
 
 sys.path.append("libs")
 
+sennet_blueprint = libs.sennet_endpoints.sennet_blueprint
+
 # This `app` will be imported by wsgi.py when deployed with uWSGI server
-app = search_adaptor_module.SearchAPI(config, translator_module).app
+app = search_adaptor_module.SearchAPI(config, translator_module, sennet_blueprint).app
 
 # For local standalone (non-docker) development/testing
 if __name__ == "__main__":
