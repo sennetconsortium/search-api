@@ -36,6 +36,12 @@ LC-MS:
     primary: true
     contains-pii: false
     vitessce-hints: []
+Lightsheet:
+    description: Lightsheet Microscopy
+    alt-names: ['Light Sheet']
+    primary: true
+    contains-pii: false
+    vitessce-hints: []
 MIBI:
   description: Multiplex Ion Beam Imaging
   alt-names: ["Multiplex Ion Beam Imaging", "mibi"]
