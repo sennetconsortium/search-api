@@ -25,6 +25,8 @@ LK:
 LL:
   description: Lung (Left)
   iri: http://purl.obolibrary.org/obo/UBERON_0002168
+LN:
+  description: Lymph Node
 LO:
   description: Ovary (Left)
 LV:
