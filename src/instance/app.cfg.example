@@ -1,3 +1,7 @@
 # Globus app client ID and secret
 APP_CLIENT_ID = ''
 APP_CLIENT_SECRET = ''
+
+UBKG_SERVER = 'https://ontology.api.hubmapconsortium.org/'
+UBKG_ENDPOINT_VALUESET = 'valueset?parent_sab=SENNET&parent_code={code}&child_sabs=SENNET'
+UBKG_CODES = '{"specimen_categories":"C020076","organ_types":"C000008", "entities": "C000012", "source_types":"C050020", "assay_types":{"code": "C004000", "key": "datasets", "endpoint": "datasets?application_context=SENNET"}}'
