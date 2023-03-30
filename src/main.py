@@ -7,7 +7,6 @@ import time
 
 from flask import Flask
 from yaml import safe_load
-from flask_cors import CORS
 
 # Atlas Consortia commons
 from atlas_consortia_commons.ubkg import initialize_ubkg
@@ -39,7 +38,6 @@ config = {}
 app = Flask(__name__, instance_path=os.path.join(os.path.abspath(os.path.dirname(__file__)), 'instance'),
             instance_relative_config=True)
 app.config.from_pyfile('app.cfg')
-cors = CORS(app, resources={r"/*": {"origins": "*"}})
 _config = app.config
 
 # load the index configurations and set the default
@@ -52,6 +50,13 @@ config['DEFAULT_ENTITY_API_URL'] = config['INDICES']['indices'][config['DEFAULT_
 
 config['APP_CLIENT_ID'] = app.config['APP_CLIENT_ID']
 config['APP_CLIENT_SECRET'] = app.config['APP_CLIENT_SECRET']
+
+config['AWS_ACCESS_KEY_ID'] = app.config['AWS_ACCESS_KEY_ID']
+config['AWS_SECRET_ACCESS_KEY'] = app.config['AWS_SECRET_ACCESS_KEY']
+config['AWS_S3_BUCKET_NAME'] = app.config['AWS_S3_BUCKET_NAME']
+config['AWS_S3_OBJECT_PREFIX'] = app.config['AWS_S3_OBJECT_PREFIX']
+config['AWS_OBJECT_URL_EXPIRATION_IN_SECS'] = app.config['AWS_OBJECT_URL_EXPIRATION_IN_SECS']
+config['LARGE_RESPONSE_THRESHOLD'] = app.config['LARGE_RESPONSE_THRESHOLD']
 
 translator_module = importlib.import_module("sennet_translator")
 
