@@ -12,6 +12,7 @@ from flask import Flask, Response
 
 # HuBMAP commons
 from hubmap_commons.hm_auth import AuthHelper
+from libs.ontology import Ontology
 
 sys.path.append("search-adaptor/src")
 from indexer import Indexer
@@ -52,7 +53,7 @@ class Translator(TranslatorInterface):
     indexer = None
     entity_api_cache = {}
 
-    def __init__(self, indices, app_client_id, app_client_secret, token):
+    def __init__(self, indices, app_client_id, app_client_secret, token, ubkg_instance=None):
         try:
             self.indices: dict = {}
             # Do not include the indexes that are self managed...
@@ -66,6 +67,7 @@ class Translator(TranslatorInterface):
                 '/')
 
             self.indexer = Indexer(self.indices, self.DEFAULT_INDEX_WITHOUT_PREFIX)
+            self.ubkg_instance = ubkg_instance
 
             logger.debug("@@@@@@@@@@@@@@@@@@@@ INDICES")
             logger.debug(self.INDICES)
@@ -494,6 +496,7 @@ class Translator(TranslatorInterface):
             if 'sample_category' in entity:
                 if entity['sample_category'].lower() == 'organ':
                     if 'organ' in entity:
+                        # self.ubkg_instance.get_ubkg_valueset(getattr(self.ubkg_instance, 'organ_types'))
                         display_subtype = get_type_description(entity['organ'], 'organ_types')
                     else:
                         logger.error(

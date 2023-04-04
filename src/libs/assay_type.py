@@ -3,6 +3,7 @@ from typing import Union, List, TypeVar, Iterable, Dict, Any
 import logging
 from yaml import safe_load, dump
 from yaml.error import YAMLError
+from libs.ontology import Ontology
 
 # HuBMAP commons
 from hubmap_commons.schema_tools import (assert_json_matches_schema,
@@ -91,8 +92,9 @@ class AssayType(object):
         """If the assay type table has not been loaded, do so."""
         if not(cls.definitions):
             try:
-                with open(DEFINITION_PATH) as f:
-                    cls.definitions = safe_load(f)
+                # with open(DEFINITION_PATH) as f:
+                #     cls.definitions = safe_load(f)
+                cls.definitions = Ontology.assay_types()
                 set_schema_base_path(SCHEMA_PATH.parent, SCHEMA_BASE_URI)
                 assert_json_matches_schema(cls.definitions, SCHEMA_PATH)
                 for k, v in cls.definitions.items():
