@@ -77,7 +77,7 @@ try:
     for exception in get_http_exceptions_classes():
         app.register_error_handler(exception, abort_err_handler)
     app.ubkg = initialize_ubkg(_config)
-    search_api_instance.set_ubkg(app.ubkg)
+    search_api_instance.ubkg_instance = app.ubkg
     with app.app_context():
         init_ontology()
 
