@@ -14,7 +14,7 @@ from flask import Flask, Response
 
 # HuBMAP commons
 from hubmap_commons.hm_auth import AuthHelper
-from libs.ontology import Ontology
+from libs.ontology import Ontology, enum_val
 
 sys.path.append("search-adaptor/src")
 from indexer import Indexer
@@ -70,7 +70,7 @@ class Translator(TranslatorInterface):
             self.indexer = Indexer(self.indices, self.DEFAULT_INDEX_WITHOUT_PREFIX)
             self.ubkg_instance = ubkg_instance
             Ontology.set_instance(self.ubkg_instance)
-            self.entity_types = Ontology.entities(as_arr=True)
+            self.entity_types = Ontology.entities(as_arr=True, cb=enum_val)
 
             logger.debug("@@@@@@@@@@@@@@@@@@@@ INDICES")
             logger.debug(self.INDICES)
@@ -498,7 +498,7 @@ class Translator(TranslatorInterface):
             display_subtype = entity['source_type']
         elif equals(entity_type, Entities.SAMPLE):
             if 'sample_category' in entity:
-                if entity['sample_category'].lower() == 'organ':
+                if equals(entity['sample_category'], Ontology.specimen_categories().ORGAN):
                     if 'organ' in entity:
                         organ_types = Ontology.organ_types(as_data_dict=True, prop_callback=None)
                         display_subtype = get_type_description(entity['organ'], organ_types, 'ubkg.organ_types')

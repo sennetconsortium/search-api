@@ -88,7 +88,7 @@ class AssayType(object):
         """If the assay type table has not been loaded, do so."""
         if not(cls.definitions):
             try:
-                cls.definitions = Ontology.assay_types(as_data_dict=True, prop_callback=None)
+                cls.definitions = Ontology.assay_types(as_data_dict=True, prop_callback=None, data_as_val=True)
                 set_schema_base_path(SCHEMA_PATH.parent, SCHEMA_BASE_URI)
                 assert_json_matches_schema(cls.definitions, SCHEMA_PATH)
                 for k, v in cls.definitions.items():

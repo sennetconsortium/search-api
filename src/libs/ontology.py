@@ -72,8 +72,8 @@ def init_ontology():
     source_types()
 
 
-def enum_val_lower(val):
-    return val.value.lower()
+def enum_val(val):
+    return val.value
 
 
 class Ontology:
