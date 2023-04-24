@@ -20,10 +20,6 @@ BoolOrNone = Union[bool, None]
 
 StrOrListStr = TypeVar('StrOrListStr', str, List[str])
 
-DEFINITION_PATH = (Path(__file__).resolve().parent.parent
-                   / 'search-schema' / 'data'
-                   / 'definitions' / 'enums' / 'assay_types.yaml')
-
 SCHEMA_PATH = (Path(__file__).resolve().parent) / 'assay_type_schema.yml'
 SCHEMA_BASE_URI = 'http://schemata.sennetconsortium.org/'
 
@@ -92,9 +88,7 @@ class AssayType(object):
         """If the assay type table has not been loaded, do so."""
         if not(cls.definitions):
             try:
-                # with open(DEFINITION_PATH) as f:
-                #     cls.definitions = safe_load(f)
-                cls.definitions = Ontology.assay_types()
+                cls.definitions = Ontology.assay_types(as_data_dict=True, prop_callback=None)
                 set_schema_base_path(SCHEMA_PATH.parent, SCHEMA_BASE_URI)
                 assert_json_matches_schema(cls.definitions, SCHEMA_PATH)
                 for k, v in cls.definitions.items():
