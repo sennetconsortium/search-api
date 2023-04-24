@@ -501,13 +501,13 @@ class Translator(TranslatorInterface):
                 if equals(entity['sample_category'], Ontology.specimen_categories().ORGAN):
                     if 'organ' in entity:
                         organ_types = Ontology.organ_types(as_data_dict=True, prop_callback=None)
-                        display_subtype = get_type_description(entity['organ'], organ_types, 'ubkg.organ_types')
+                        display_subtype = get_type_description_from_dict(entity['organ'], organ_types, 'ubkg.organ_types')
                     else:
                         logger.error(
                             f"Missing missing organ when sample_category is set of Sample with uuid: {entity['uuid']}")
                 else:
                     sample_categories = Ontology.specimen_categories(as_data_dict=True, prop_callback=None)
-                    display_subtype = get_type_description(entity['sample_category'], sample_categories, 'ubkg.specimen_categories')
+                    display_subtype = get_type_description_from_dict(entity['sample_category'], sample_categories, 'ubkg.specimen_categories')
             else:
                 logger.error(f"Missing sample_category of Sample with uuid: {entity['uuid']}")
         elif equals(entity_type, Entities.DATASET):
