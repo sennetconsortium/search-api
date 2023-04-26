@@ -8,6 +8,7 @@ import sys
 import time
 
 from atlas_consortia_commons.string import equals
+from atlas_consortia_commons.ubkg import initialize_ubkg
 from yaml import safe_load
 
 from flask import Flask, Response
@@ -795,6 +796,7 @@ if __name__ == "__main__":
     app = Flask(__name__, instance_path=os.path.join(os.path.abspath(os.path.dirname(__file__)), '../src/instance'),
                 instance_relative_config=True)
     app.config.from_pyfile('app.cfg')
+    ubkg_instance = initialize_ubkg(app.config)
 
     INDICES = safe_load((Path(__file__).absolute().parent / 'instance/search-config.yaml').read_text())
 
@@ -806,7 +808,7 @@ if __name__ == "__main__":
         sys.exit(msg)
 
     # Create an instance of the indexer
-    translator = Translator(INDICES, app.config['APP_CLIENT_ID'], app.config['APP_CLIENT_SECRET'], token)
+    translator = Translator(INDICES, app.config['APP_CLIENT_ID'], app.config['APP_CLIENT_SECRET'], token, ubkg_instance)
 
     auth_helper = translator.init_auth_helper()
 
