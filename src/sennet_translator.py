@@ -6,12 +6,16 @@ import logging
 import os
 import sys
 import time
+
+from atlas_consortia_commons.string import equals
+from atlas_consortia_commons.ubkg import initialize_ubkg
 from yaml import safe_load
 
 from flask import Flask, Response
 
 # HuBMAP commons
 from hubmap_commons.hm_auth import AuthHelper
+from libs.ontology import Ontology, enum_val
 
 sys.path.append("search-adaptor/src")
 from indexer import Indexer
@@ -37,7 +41,6 @@ entity_properties_list = [
     'immediate_descendants',
     'datasets'
 ]
-entity_types = ['Source', 'Sample', 'Dataset']
 
 
 class Translator(TranslatorInterface):
@@ -52,7 +55,7 @@ class Translator(TranslatorInterface):
     indexer = None
     entity_api_cache = {}
 
-    def __init__(self, indices, app_client_id, app_client_secret, token):
+    def __init__(self, indices, app_client_id, app_client_secret, token, ubkg_instance=None):
         try:
             self.indices: dict = {}
             # Do not include the indexes that are self managed...
@@ -66,6 +69,9 @@ class Translator(TranslatorInterface):
                 '/')
 
             self.indexer = Indexer(self.indices, self.DEFAULT_INDEX_WITHOUT_PREFIX)
+            self.ubkg_instance = ubkg_instance
+            Ontology.set_instance(self.ubkg_instance)
+            self.entity_types = Ontology.entities(as_arr=True, cb=enum_val)
 
             logger.debug("@@@@@@@@@@@@@@@@@@@@ INDICES")
             logger.debug(self.INDICES)
@@ -473,7 +479,7 @@ class Translator(TranslatorInterface):
         entity['index_version'] = self.index_version
 
         # Add display_subtype
-        if entity['entity_type'] in entity_types:
+        if entity['entity_type'] in self.entity_types:
             entity['display_subtype'] = self.generate_display_subtype(entity)
 
     # For Upload, Dataset, Source and Sample objects:
@@ -487,22 +493,25 @@ class Translator(TranslatorInterface):
     def generate_display_subtype(self, entity):
         entity_type = entity['entity_type']
         display_subtype = '{unknown}'
+        Entities = Ontology.entities()
 
-        if entity_type == 'Source':
+        if equals(entity_type, Entities.SOURCE):
             display_subtype = entity['source_type']
-        elif entity_type == 'Sample':
+        elif equals(entity_type, Entities.SAMPLE):
             if 'sample_category' in entity:
-                if entity['sample_category'].lower() == 'organ':
+                if equals(entity['sample_category'], Ontology.specimen_categories().ORGAN):
                     if 'organ' in entity:
-                        display_subtype = get_type_description(entity['organ'], 'organ_types')
+                        organ_types = Ontology.organ_types(as_data_dict=True, prop_callback=None)
+                        display_subtype = get_val_by_key(entity['organ'], organ_types, 'ubkg.organ_types')
                     else:
                         logger.error(
                             f"Missing missing organ when sample_category is set of Sample with uuid: {entity['uuid']}")
                 else:
-                    display_subtype = get_type_description(entity['sample_category'], 'tissue_sample_types')
+                    sample_categories = Ontology.specimen_categories(as_data_dict=True, prop_callback=None)
+                    display_subtype = get_val_by_key(entity['sample_category'], sample_categories, 'ubkg.specimen_categories')
             else:
                 logger.error(f"Missing sample_category of Sample with uuid: {entity['uuid']}")
-        elif entity_type == 'Dataset':
+        elif equals(entity_type, Entities.DATASET):
             if 'data_types' in entity:
                 display_subtype = ','.join(entity['data_types'])
             else:
@@ -766,6 +775,20 @@ class Translator(TranslatorInterface):
             logger.exception(msg)
 
 
+def get_val_by_key(type_code, data, source_data_name):
+    # Use triple {{{}}}
+    result_val = f"{{{type_code}}}"
+
+    if type_code in data:
+        result_val = data[type_code]
+    else:
+        # Return the error message as result
+        logger.error(f"Missing key {type_code} in {source_data_name}")
+
+    logger.debug(f"======== get_val_by_key: {result_val}")
+
+    return result_val
+
 # This approach is different from the live reindex via HTTP request
 # It'll delete all the existing indices and recreate then then index everything
 if __name__ == "__main__":
@@ -773,6 +796,7 @@ if __name__ == "__main__":
     app = Flask(__name__, instance_path=os.path.join(os.path.abspath(os.path.dirname(__file__)), '../src/instance'),
                 instance_relative_config=True)
     app.config.from_pyfile('app.cfg')
+    ubkg_instance = initialize_ubkg(app.config)
 
     INDICES = safe_load((Path(__file__).absolute().parent / 'instance/search-config.yaml').read_text())
 
@@ -784,7 +808,7 @@ if __name__ == "__main__":
         sys.exit(msg)
 
     # Create an instance of the indexer
-    translator = Translator(INDICES, app.config['APP_CLIENT_ID'], app.config['APP_CLIENT_SECRET'], token)
+    translator = Translator(INDICES, app.config['APP_CLIENT_ID'], app.config['APP_CLIENT_SECRET'], token, ubkg_instance)
 
     auth_helper = translator.init_auth_helper()
 

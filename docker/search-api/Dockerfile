@@ -1,5 +1,8 @@
 # Parent image
 FROM sennet/api-base-image:1.0.0
+ENV LANG=en_US.UTF-8
+ENV LANGUAGE en_US:en
+ENV LC_ALL en_US.UTF-8
 
 LABEL description="SenNet Search API Service"
 
@@ -42,6 +45,7 @@ RUN yum install -y yum-utils && \
     rm -rf nginx && \
     pip install --upgrade pip -r src/requirements.txt && \
     chmod +x start.sh && \
+    dnf install langpacks-en glibc-all-langpacks -y && \
     yum clean all
 
 # The EXPOSE instruction informs Docker that the container listens on the specified network ports at runtime. 
