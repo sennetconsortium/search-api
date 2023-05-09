@@ -468,7 +468,7 @@ class Translator(TranslatorInterface):
                 dataset_doc.pop('immediate_descendants')
                 dataset_doc.pop('immediate_ancestors')
                 dataset_doc.pop('source')
-                dataset_doc.pop('origin_sample')
+                # dataset_doc.pop('origin_sample')
                 dataset_doc.pop('source_sample')
 
                 datasets.append(dataset_doc)
