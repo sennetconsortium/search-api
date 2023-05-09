@@ -91,9 +91,8 @@ class Translator(TranslatorInterface):
         # Add index_version by parsing the VERSION file
         self.index_version = ((Path(__file__).absolute().parent.parent / 'VERSION').read_text()).strip()
 
-
-        # # Preload all the transformers
-        # self.init_transformers()
+        with open(Path(__file__).resolve().parent / 'sennet_translation' / 'neo4j-to-es-attributes.json', 'r') as json_file:
+            self.attr_map = json.load(json_file)
 
     def translate_all(self):
         with app.app_context():
@@ -281,22 +280,6 @@ class Translator(TranslatorInterface):
             if public_index != private_index:
                 self.indexer.delete_document(entity_id, private_index)
 
-    # When indexing, Upload WILL NEVER BE PUBLIC
-    # def translate_upload(self, entity_id, reindex=False):
-    #     try:
-    #         default_private_index = self.INDICES['indices'][self.DEFAULT_INDEX_WITHOUT_PREFIX]['private']
-    #
-    #         # Retrieve the upload entity details
-    #         upload = self.call_entity_api(entity_id, 'entities')
-    #
-    #         self.add_datasets_to_entity(upload)
-    #
-    #         # Add additional calculated fields if any applies to Upload
-    #         self.add_calculated_fields(upload)
-    #
-    #         self.call_indexer(upload, reindex, json.dumps(upload), default_private_index)
-    #     except Exception as e:
-    #         logger.error(e)
 
     def translate_public_collection(self, entity_id, reindex=False):
         try:
@@ -315,6 +298,7 @@ class Translator(TranslatorInterface):
                 sys.exit(msg)
 
             self.add_datasets_to_entity(collection)
+            self.entity_keys_rename(collection)
 
             # Add additional calculated fields if any applies to Collection
             self.add_calculated_fields(collection)
@@ -461,6 +445,7 @@ class Translator(TranslatorInterface):
                 dataset = self.call_entity_api(dataset['uuid'], 'entities')
 
                 dataset_doc = self.generate_doc(dataset, 'dict')
+                dataset_doc.pop('antibodies')
                 dataset_doc.pop('ancestors')
                 dataset_doc.pop('ancestor_ids')
                 dataset_doc.pop('descendants')
@@ -474,6 +459,44 @@ class Translator(TranslatorInterface):
                 datasets.append(dataset_doc)
 
         entity['datasets'] = datasets
+
+    def entity_keys_rename(self, entity):
+        logger.info("Start executing entity_keys_rename()")
+
+        # logger.debug("==================entity before renaming keys==================")
+        # logger.debug(entity)
+
+        to_delete_keys = []
+        temp = {}
+
+        for key in entity:
+            to_delete_keys.append(key)
+            if key in self.attr_map['ENTITY']:
+                # Special case of Sample.rui_location
+                # To be backward compatible for API clients relying on the old version
+                # Also gives the ES consumer flexibility to change the inner structure
+                # Note: when `rui_location` is stored as json object (Python dict) in ES
+                # with the default dynamic mapping, it can cause errors due to
+                # the changing data types of some internal fields
+                # isinstance() check is to avoid json.dumps() on json string again
+                if (key == 'rui_location') and isinstance(entity[key], dict):
+                    # Convert Python dict to json string
+                    temp_val = json.dumps(entity[key])
+                else:
+                    temp_val = entity[key]
+
+                temp[self.attr_map['ENTITY'][key]['es_name']] = temp_val
+
+        for key in to_delete_keys:
+            if key not in entity_properties_list:
+                entity.pop(key)
+
+        entity.update(temp)
+
+        # logger.debug("==================entity after renaming keys==================")
+        # logger.debug(entity)
+
+        logger.info("Finished executing entity_keys_rename()")
 
 
     # These calculated fields are not stored in neo4j but will be generated
@@ -622,6 +645,7 @@ class Translator(TranslatorInterface):
                         if 'files' in ingest_metadata:
                             entity['files'] = ingest_metadata['files']
 
+            self.entity_keys_rename(entity)
 
             # Is group_uuid always set?
             # In case if group_name not set
@@ -641,6 +665,24 @@ class Translator(TranslatorInterface):
             if ('metadata' in entity) and ('files' in entity['metadata']):
                 entity['metadata'].pop('files')
 
+
+            if entity.get('origin_sample', None):
+                self.entity_keys_rename(entity['origin_sample'])
+            if entity.get('source_sample', None):
+                for s in entity.get('source_sample', None):
+                    self.entity_keys_rename(s)
+            if entity.get('ancestors', None):
+                for a in entity.get('ancestors', None):
+                    self.entity_keys_rename(a)
+            if entity.get('descendants', None):
+                for d in entity.get('descendants', None):
+                    self.entity_keys_rename(d)
+            if entity.get('immediate_descendants', None):
+                for parent in entity.get('immediate_descendants', None):
+                    self.entity_keys_rename(parent)
+            if entity.get('immediate_ancestors', None):
+                for child in entity.get('immediate_ancestors', None):
+                    self.entity_keys_rename(child)
 
             remove_specific_key_entry(entity, "other_metadata")
 
