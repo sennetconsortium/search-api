@@ -9,6 +9,7 @@ import time
 
 from atlas_consortia_commons.string import equals
 from atlas_consortia_commons.ubkg import initialize_ubkg
+from requests import HTTPError
 from yaml import safe_load
 
 from flask import Flask, Response
@@ -173,7 +174,10 @@ class Translator(TranslatorInterface):
     def translate(self, entity_id):
         try:
             # Retrieve the entity details
-            entity = self.call_entity_api(entity_id, 'entities')
+            try:
+                entity = self.call_entity_api(entity_id, 'entities')
+            except HTTPError:
+                entity = self.call_entity_api(entity_id, 'collections')
 
             # Check if entity is empty
             if bool(entity):
@@ -464,7 +468,7 @@ class Translator(TranslatorInterface):
                 dataset_doc.pop('immediate_descendants')
                 dataset_doc.pop('immediate_ancestors')
                 dataset_doc.pop('source')
-                dataset_doc.pop('origin_sample')
+                # dataset_doc.pop('origin_sample')
                 dataset_doc.pop('source_sample')
 
                 datasets.append(dataset_doc)
