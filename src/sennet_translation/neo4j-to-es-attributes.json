@@ -9,6 +9,9 @@
     "submission_id": {
       "es_name": "submission_id"
     },
+    "lab_source_id": {
+      "es_name": "lab_source_id"
+    },
     "lab_dataset_id": {
       "es_name": "lab_dataset_id"
     },
