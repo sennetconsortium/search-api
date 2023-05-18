@@ -192,7 +192,7 @@ class Translator(TranslatorInterface):
                     descendant_entity_ids = self.call_entity_api(entity_id, 'descendants', 'uuid')
 
                     # Only Dataset entities may have previous/next revisions
-                    if entity['entity_type'] == 'Dataset':
+                    if entity['entity_type'] in ['Dataset', 'Publication']:
                         previous_revision_entity_ids = self.call_entity_api(entity_id, 'previous_revisions',
                                                                             'uuid')
                         next_revision_entity_ids = self.call_entity_api(entity_id, 'next_revisions', 'uuid')
@@ -249,7 +249,7 @@ class Translator(TranslatorInterface):
     def is_public(self, document):
         is_public = False
 
-        if document['entity_type'] == 'Dataset':
+        if document['entity_type'] in ['Dataset', 'Publication']:
             # In case 'status' not set
             if 'status' in document:
                 if document['status'].lower() == self.DATASET_STATUS_PUBLISHED:
@@ -603,7 +603,7 @@ class Translator(TranslatorInterface):
                 entity['immediate_descendants'] = immediate_descendants
 
             # The origin_sample is the sample that `sample_category` is "organ" and the `organ` code is set at the same time
-            if entity['entity_type'] in ['Sample', 'Dataset']:
+            if entity['entity_type'] in ['Sample', 'Dataset', 'Publication']:
                 # Add new properties
                 entity['source'] = source
 
@@ -621,7 +621,7 @@ class Translator(TranslatorInterface):
                         entity['origin_sample'] = {}
 
                 # Trying to understand here!!!
-                if entity['entity_type'] == 'Dataset':
+                if entity['entity_type'] in ['Dataset', 'Publication']:
                     entity['source_sample'] = None
 
                     e = entity
@@ -698,7 +698,7 @@ class Translator(TranslatorInterface):
     def generate_public_doc(self, entity):
         # Only Dataset has this 'next_revision_uuid' property
         property_key = 'next_revision_uuid'
-        if (entity['entity_type'] == 'Dataset') and (property_key in entity):
+        if (entity['entity_type'] in ['Dataset', 'Publication']) and (property_key in entity):
             next_revision_uuid = entity[property_key]
             # Making a call against entity-api/entities/<next_revision_uuid>?property=status
             url = self.entity_api_url + "/entities/" + next_revision_uuid + "?property=status"
