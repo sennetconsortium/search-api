@@ -445,7 +445,6 @@ class Translator(TranslatorInterface):
                 dataset = self.call_entity_api(dataset['uuid'], 'entities')
 
                 dataset_doc = self.generate_doc(dataset, 'dict')
-                dataset_doc.pop('antibodies')
                 dataset_doc.pop('ancestors')
                 dataset_doc.pop('ancestor_ids')
                 dataset_doc.pop('descendants')
