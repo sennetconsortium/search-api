@@ -230,15 +230,14 @@ class Translator(TranslatorInterface):
 
             self.indexer.index(entity_id, json.dumps(document), private_index, True)
 
-    def add(self, entity_id, document):
-        for index in self.indices.keys():
-            public_index = self.INDICES['indices'][index]['public']
-            private_index = self.INDICES['indices'][index]['private']
+    def add(self, entity_id, document, index=None, scope=None):
+        public_index = self.INDICES['indices'][index]['public']
+        private_index = self.INDICES['indices'][index]['private']
 
-            if self.is_public(document):
-                self.indexer.index(entity_id, json.dumps(document), public_index, False)
-
-            self.indexer.index(entity_id, json.dumps(document), private_index, False)
+        if self.is_public(document):
+            return self.indexer.index(entity_id, json.dumps(document), public_index, False)
+        else:
+            return self.indexer.index(entity_id, json.dumps(document), private_index, False)
 
     # Collection doesn't actually have this `data_access_level` property
     # This method is only applied to Source/Sample/Dataset
@@ -269,6 +268,77 @@ class Translator(TranslatorInterface):
                     f"{document['entity_type']} of uuid: {document['uuid']} missing 'data_access_level' property, treat as not public, verify and set the data_access_level.")
 
         return is_public
+
+    def delete_docs(self, index, scope, entity_id):
+        # Clear multiple documents from the OpenSearch indices associated with the composite index specified
+        # When index is for the files-api and entity_id is for a File, clear all file manifests for the File.
+        # When index is for the files-api and entity_id is for a Dataset, clear all file manifests for the Dataset.
+        # When index is for the files-api and entity_id is not specified, clear all file manifests in the index.
+        # Otherwise, raise an Exception indicating the specified arguments are not supported.
+
+        if not index:
+            # Shouldn't happen due to configuration of Flask Blueprint routes
+            raise ValueError(f"index must be specified for delete_docs()")
+
+        if index == 'files':
+            # For deleting documents, try removing them from the specified scope, but do not
+            # raise any Exception or return an error response if they are not there to be deleted.
+            scope_list = [scope] if scope else ['public', 'private']
+
+            if entity_id:
+                try:
+                    # Get the Dataset entity with the specified entity_id
+                    theEntity = self.call_entity_api(entity_id, 'entities')
+                except Exception as e:
+                    # entity-api may throw an Exception if entity_id is actually the
+                    # uuid of a File, so swallow the error here and process as
+                    # removing the file info document for a File below
+                    logger.info(    f"No entity found  with entity_id '{entity_id}' in Neo4j, so process as"
+                                    f" a request to delete a file info document for a File with that UUID.")
+                    theEntity = {   'entity_type': 'File'
+                                    ,'uuid': entity_id}
+
+            response = ''
+            for scope in scope_list:
+                target_index = self.indices[index][scope]
+                if entity_id:
+                    # Confirm the found entity for entity_id is of a supported type.  This probably repeats
+                    # work done by the caller, but count on the caller for other business logic, like constraining
+                    # to Datasets without PHI.
+                    if theEntity and theEntity['entity_type'] not in ['Dataset',  'Publication', 'File']:
+                        raise ValueError(   f"Translator.delete_docs() is not configured to clear documents for"
+                                            f" entities of type '{theEntity['entity_type']} for HuBMAP.")
+                    elif theEntity['entity_type'] in ['Dataset', 'Publication']:
+                        try:
+                            resp = self.indexer.delete_fieldmatch_document( target_index
+                                                                            ,'dataset_uuid'
+                                                                            , theEntity['uuid'])
+                            response += resp[0]
+                        except Exception as e:
+                            response += (f"While deleting the Dataset '{theEntity['uuid']}' file info documents"
+                                         f" from {target_index},"
+                                         f" exception raised was {str(e)}.")
+                    elif theEntity['entity_type'] == 'File':
+                        try:
+                            resp = self.indexer.delete_fieldmatch_document( target_index
+                                                                            ,'file_uuid'
+                                                                            ,theEntity['uuid'])
+                            response += resp[0]
+                        except Exception as e:
+                            response += (   f"While deleting the File '{theEntity['uuid']}' file info document" 
+                                            f" from {target_index},"
+                                            f" exception raised was {str(e)}.")
+                    else:
+                        raise ValueError(   f"Unable to find a Dataset or File with identifier {entity_id} whose"
+                                            f" file info documents can be deleted from OpenSearch.")
+                else:
+                    # Since a File or a Dataset was not specified, delete all documents from
+                    # the target index.
+                    response += self.indexer.delete_fieldmatch_document(target_index)
+                response += ' '
+            return response
+        else:
+            raise ValueError(f"The index '{index}' is not recognized for delete_docs() operations.")
 
     def delete(self, entity_id):
         for index, _ in self.indices.items():
