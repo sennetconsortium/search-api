@@ -16,7 +16,7 @@ indices:
     elasticsearch:
       url: <ES URL>
       mappings: "sennet_translation/search-default-config.yaml"
-    files:
+  files:
     active: true
     reindex_enabled: true
     public: sn_dev_public_files
