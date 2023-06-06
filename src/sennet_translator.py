@@ -248,6 +248,11 @@ class Translator(TranslatorInterface):
     def is_public(self, document):
         is_public = False
 
+        if 'file_uuid' in document:
+            # Confirm the Dataset to which the File entity belongs is published
+            dataset = self.call_entity_api(document['dataset_uuid'], 'entities')
+            return self.is_public(dataset)
+
         if document['entity_type'] in ['Dataset', 'Publication']:
             # In case 'status' not set
             if 'status' in document:
