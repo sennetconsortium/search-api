@@ -18,7 +18,7 @@ indices:
       mappings: "sennet_translation/search-default-config.yaml"
   files:
     active: true
-    reindex_enabled: true
+    reindex_enabled: false
     public: sn_dev_public_files
     private: sn_dev_consortium_files
     elasticsearch:
