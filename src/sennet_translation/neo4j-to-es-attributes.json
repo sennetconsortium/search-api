@@ -188,6 +188,15 @@
     },
     "error_message": {
       "es_name": "error_message"
+    },
+    "pipeline_message": {
+      "es_name": "pipeline_message"
+    },
+    "ingest_id": {
+      "es_name": "ingest_id"
+    },
+    "run_id": {
+      "es_name": "run_id"
     }
   }
 }
