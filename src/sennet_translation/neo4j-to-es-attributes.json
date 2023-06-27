@@ -81,6 +81,9 @@
     "metadata": {
       "es_name": "metadata"
     },
+    "source_mapped_metadata": {
+      "es_name": "source_mapped_metadata"
+    },
     "specimen_metadata": {
       "es_name": "metadata"
     },
