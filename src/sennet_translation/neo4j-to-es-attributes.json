@@ -78,6 +78,9 @@
     "ingest_metadata": {
       "es_name": "metadata"
     },
+    "files": {
+      "es_name": "files"
+    },
     "metadata": {
       "es_name": "metadata"
     },
