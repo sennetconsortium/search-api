@@ -625,6 +625,8 @@ class Translator(TranslatorInterface):
         return display_subtype
 
     def generate_doc(self, entity, return_type):
+        Entities = Ontology.entities()
+
         try:
             entity_id = entity['uuid']
 
@@ -714,10 +716,10 @@ class Translator(TranslatorInterface):
                             entity['source_sample'] = {}
 
                     # Move files to the root level if exist
-                    if 'ingest_metadata' in entity:
-                        ingest_metadata = entity['ingest_metadata']
-                        if 'files' in ingest_metadata:
-                            entity['files'] = ingest_metadata['files']
+                    if 'metadata' in entity and equals(entity['entity_type'], Entities.DATASET):
+                        metadata = entity['metadata']
+                        if 'files' in metadata:
+                            entity['files'] = metadata['files']
 
             self.entity_keys_rename(entity)
 
