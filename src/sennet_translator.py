@@ -59,10 +59,13 @@ class Translator(TranslatorInterface):
     def __init__(self, indices, app_client_id, app_client_secret, token, ubkg_instance=None):
         try:
             self.indices: dict = {}
-            # Do not include the indexes that are self managed...
+            self.self_managed_indices: dict = {}
+            # Do not include the indexes that are self managed
             for key, value in indices['indices'].items():
                 if 'reindex_enabled' in value and value['reindex_enabled'] is True:
                     self.indices[key] = value
+                else:
+                    self.self_managed_indices[key] = value
             self.DEFAULT_INDEX_WITHOUT_PREFIX: str = indices['default_index']
             self.INDICES: dict = {'default_index': self.DEFAULT_INDEX_WITHOUT_PREFIX, 'indices': self.indices}
             self.DEFAULT_ENTITY_API_URL = self.INDICES['indices'][self.DEFAULT_INDEX_WITHOUT_PREFIX][
@@ -94,6 +97,37 @@ class Translator(TranslatorInterface):
         with open(Path(__file__).resolve().parent / 'sennet_translation' / 'neo4j-to-es-attributes.json', 'r') as json_file:
             self.attr_map = json.load(json_file)
 
+    def __get_scope_list(self, entity_id, document, index, scope):
+        scope_list = []
+        if index == 'files':
+            # It would be nice if the possible scopes could be identified from
+            # self.INDICES['indices'] rather than hardcoded. @TODO
+            # This can handle indices besides "files" which might accept "scope" as
+            # an argument, but returning an empty list, not raising an Exception, for
+            # an  unrecognized index name.
+            if scope is not None:
+                if scope not in ['public', 'private']:
+                    msg = (f"Unrecognized scope '{scope}' requested for"
+                           f" entity_id '{entity_id}' in Dataset '{document['dataset_uuid']}.")
+                    logger.info(msg)
+                    raise ValueError(msg)
+                elif scope == 'public':
+                    if self.is_public(document):
+                        scope_list.append(scope)
+                    else:
+                        # Reject the addition of 'public' was explicitly indicated, even though
+                        # the public index may be silently skipped when a scope is not specified, in
+                        # order to mimic behavior below for "non-self managed" indices.
+                        msg = (f"Dataset '{document['dataset_uuid']}"
+                               f" does not have status {self.DATASET_STATUS_PUBLISHED}, so"
+                               f" entity_id '{entity_id}' cannot go in a public index.")
+                        logger.info(msg)
+                        raise ValueError(msg)
+                elif scope == 'private':
+                    scope_list.append(scope)
+            else:
+                scope_list = ['public', 'private']
+        return scope_list
     def translate_all(self):
         with app.app_context():
             try:
@@ -220,24 +254,60 @@ class Translator(TranslatorInterface):
             # Log the full stack trace, prepend a line with our message
             logger.exception(msg)
 
-    def update(self, entity_id, document):
-        for index in self.indices.keys():
+    def update(self, entity_id, document, index=None, scope=None):
+        if index is not None and index == 'files':
+            # The "else clause" is the dominion of the original flavor of OpenSearch indices, for which search-api
+            # was created.  This clause is specific to 'files' indices, by virtue of the conditions and the
+            # following assumption that dataset_uuid is on the JSON body. @TODO-KBKBKB right?
+            scope_list = self.__get_scope_list(entity_id, document, index, scope)
+
+            response = ''
+            for scope in scope_list:
+                target_index = self.self_managed_indices[index][scope]
+                if scope == 'public' and not self.is_public(document):
+                    # Mimic behavior of "else:" clause for "non-self managed" indices below, and
+                    # silently skip public if it was put on the list by __get_scope_list() because
+                    # the scope was not explicitly specified.
+                    continue
+                response += self.indexer.index(entity_id, json.dumps(document), target_index, True)
+                response += '. '
+        else:
+            for index in self.indices.keys():
+                public_index = self.INDICES['indices'][index]['public']
+                private_index = self.INDICES['indices'][index]['private']
+
+                if self.is_public(document):
+                    response = self.indexer.index(entity_id, json.dumps(document), public_index, True)
+
+                response += self.indexer.index(entity_id, json.dumps(document), private_index, True)
+        return response
+
+    def add(self, entity_id, document, index=None, scope=None):
+        if index is not None and index == 'files':
+            # The "else clause" is the dominion of the original flavor of OpenSearch indices, for which search-api
+            # was created.  This clause is specific to 'files' indices, by virtue of the conditions and the
+            # following assumption that dataset_uuid is on the JSON body. @TODO-KBKBKB right?
+            scope_list = self.__get_scope_list(entity_id, document, index, scope)
+
+            response = ''
+            for scope in scope_list:
+                target_index = self.self_managed_indices[index][scope]
+                if scope == 'public' and not self.is_public(document):
+                    # Mimic behavior of "else:" clause for "non-self managed" indices below, and
+                    # silently skip public if it was put on the list by __get_scope_list() because
+                    # the scope was not explicitly specified.
+                    continue
+                response += self.indexer.index(entity_id, json.dumps(document), target_index, False)
+                response += '. '
+        else:
             public_index = self.INDICES['indices'][index]['public']
             private_index = self.INDICES['indices'][index]['private']
 
             if self.is_public(document):
-                self.indexer.index(entity_id, json.dumps(document), public_index, True)
+                response =self.indexer.index(entity_id, json.dumps(document), public_index, False)
+            response += self.indexer.index(entity_id, json.dumps(document), private_index, False)
 
-            self.indexer.index(entity_id, json.dumps(document), private_index, True)
-
-    def add(self, entity_id, document, index=None, scope=None):
-        public_index = self.INDICES['indices'][index]['public']
-        private_index = self.INDICES['indices'][index]['private']
-
-        if self.is_public(document):
-            return self.indexer.index(entity_id, json.dumps(document), public_index, False)
-        else:
-            return self.indexer.index(entity_id, json.dumps(document), private_index, False)
+        return response
 
     # Collection doesn't actually have this `data_access_level` property
     # This method is only applied to Source/Sample/Dataset
@@ -305,7 +375,7 @@ class Translator(TranslatorInterface):
 
             response = ''
             for scope in scope_list:
-                target_index = self.indices[index][scope]
+                target_index = self.self_managed_indices[index][scope]
                 if entity_id:
                     # Confirm the found entity for entity_id is of a supported type.  This probably repeats
                     # work done by the caller, but count on the caller for other business logic, like constraining
@@ -856,45 +926,62 @@ class Translator(TranslatorInterface):
 
         return collection_dict
 
-    def main(self):
+    def delete_and_recreate_indices(self, files=False):
         try:
+            logger.info("Start executing delete_and_recreate_indices()")
+            public_index = None
+            private_index = None
+
             # Delete and recreate target indices
-            # for index, configs in self.indices['indices'].items():
-            for index in self.indices.keys():
-                # each index should have a public/private index
-                public_index = self.INDICES['indices'][index]['public']
-                private_index = self.INDICES['indices'][index]['private']
+            if files:
+                for index in self.self_managed_indices.keys():
+                    public_index = self.self_managed_indices[index]['public']
+                    private_index = self.self_managed_indices[index]['private']
 
-                try:
-                    self.indexer.delete_index(public_index)
-                except Exception as e:
-                    pass
+                    self.delete_index(public_index)
+                    self.delete_index(private_index)
 
-                try:
-                    self.indexer.delete_index(private_index)
-                except Exception as e:
-                    pass
-                print('*********************************************')
+                    index_mapping_file = self.self_managed_indices[index]['elasticsearch']['mappings']
 
-                # get the specific mapping file for the designated index
-                index_mapping_file = self.INDICES['indices'][index]['elasticsearch']['mappings']
+                    # read the elasticserach specific mappings
+                    index_mapping_settings = safe_load(
+                        (Path(__file__).absolute().parent / index_mapping_file).read_text())
 
-                # read the elasticserach specific mappings
-                index_mapping_settings = safe_load((Path(__file__).absolute().parent / index_mapping_file).read_text())
+                    self.indexer.create_index(public_index, index_mapping_settings)
+                    self.indexer.create_index(private_index, index_mapping_settings)
 
-                print(index_mapping_settings)
+                    logger.info("Finished executing delete_and_recreate_indices()")
 
-                print('*********************************************')
 
-                self.indexer.create_index(public_index, index_mapping_settings)
+            else:
+                for index in self.indices.keys():
+                    # each index should have a public/private index
+                    public_index = self.INDICES['indices'][index]['public']
+                    private_index = self.INDICES['indices'][index]['private']
 
-                print('*********************************************')
-                self.indexer.create_index(private_index, index_mapping_settings)
+                    self.delete_index(public_index)
+                    self.delete_index(private_index)
 
+                    # get the specific mapping file for the designated index
+                    index_mapping_file = self.INDICES['indices'][index]['elasticsearch']['mappings']
+
+                    # read the elasticserach specific mappings
+                    index_mapping_settings = safe_load((Path(__file__).absolute().parent / index_mapping_file).read_text())
+
+                    self.indexer.create_index(public_index, index_mapping_settings)
+                    self.indexer.create_index(private_index, index_mapping_settings)
+
+                    logger.info("Finished executing delete_and_recreate_indices()")
         except Exception:
-            msg = "Exception encountered during executing indexer.main()"
+            msg = "Exception encountered during executing delete_and_recreate_indices()"
             # Log the full stack trace, prepend a line with our message
             logger.exception(msg)
+
+    def delete_index(self, index):
+        try:
+            self.indexer.delete_index(index)
+        except Exception as e:
+            pass
 
 
 def get_val_by_key(type_code, data, source_data_name):
@@ -947,7 +1034,6 @@ if __name__ == "__main__":
     group_ids = user_info_dict['group_membership_ids']
 
     # Ensure the user belongs to the Globus Data Admin group
-    # TODO: Need to generalize this once authorization is updated
     if not auth_helper.has_data_admin_privs(token):
         msg = "The given token doesn't belong to the Globus Data Admin group, access not granted"
         # Log the full stack trace, prepend a line with our message
@@ -957,9 +1043,18 @@ if __name__ == "__main__":
     start = time.time()
     logger.info("############# Full index via script started #############")
 
-    translator.main()
+    # translator.delete_and_recreate_indices(files=False)
+    translator.delete_and_recreate_indices(files=True)
     translator.translate_all()
 
+    # Show the failed entity-api calls and the uuids
+    if translator.failed_entity_api_calls:
+        logger.info(f"{len(translator.failed_entity_api_calls)} entity-api calls failed")
+        print(*translator.failed_entity_api_calls, sep="\n")
+
+    if translator.failed_entity_ids:
+        logger.info(f"{len(translator.failed_entity_ids)} entity ids failed")
+        print(*translator.failed_entity_ids, sep="\n")
+
     end = time.time()
-    logger.info(
-        f"############# Full index via script completed. Total time used: {end - start} seconds. #############")
+    logger.info(f"############# Full index via script completed. Total time used: {end - start} seconds. #############")
