@@ -7,14 +7,25 @@ mappings:
   date_detection: False
   dynamic_templates:
     -
-      transposition_kit_number:
-        path_match: "*.transposition_kit_number"
+      living_donor_data:
+        path_match: "*.living_donor_data.data_value"
         mapping:
-          copy_to: all_text
           type: text
           fields:
             keyword:
               type: keyword
+    -
+      metadata_value_fields:
+        match_pattern: "regex"
+        match: "^(.*_value)$"
+        mapping:
+          type: float
+    -
+      metadata_number_fields:
+        match_pattern: "regex"
+        match: "^(.*_number)$"
+        mapping:
+          type: float
     - # Handle all numeric types as float to avoid cast errors
       map_every_numeric:
         match_mapping_type: long
