@@ -1044,7 +1044,7 @@ if __name__ == "__main__":
     logger.info("############# Full index via script started #############")
 
     translator.delete_and_recreate_indices(files=False)
-    # translator.delete_and_recreate_indices(files=True)
+    translator.delete_and_recreate_indices(files=True)
     translator.translate_all()
 
     # Show the failed entity-api calls and the uuids
