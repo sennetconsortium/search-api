@@ -8,6 +8,7 @@ import sys
 import time
 
 from atlas_consortia_commons.string import equals
+from atlas_consortia_commons.object import enum_val
 from atlas_consortia_commons.ubkg import initialize_ubkg
 from requests import HTTPError
 from yaml import safe_load
@@ -16,7 +17,7 @@ from flask import Flask, Response
 
 # HuBMAP commons
 from hubmap_commons.hm_auth import AuthHelper
-from libs.ontology import Ontology, enum_val
+from libs.ontology import Ontology
 
 sys.path.append("search-adaptor/src")
 from indexer import Indexer
