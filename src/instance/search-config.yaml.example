@@ -23,4 +23,4 @@ indices:
     private: sn_dev_consortium_files
     elasticsearch:
       url: <ES URL>
-      mappings: "sennet_translation/search-default-config.yaml"
+      mappings: "sennet_translation/file-default-config.yaml"
