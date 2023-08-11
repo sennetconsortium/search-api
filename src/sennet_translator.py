@@ -8,6 +8,7 @@ import sys
 import time
 
 from atlas_consortia_commons.string import equals
+from atlas_consortia_commons.object import enum_val
 from atlas_consortia_commons.ubkg import initialize_ubkg
 from requests import HTTPError
 from yaml import safe_load
@@ -16,7 +17,7 @@ from flask import Flask, Response
 
 # HuBMAP commons
 from hubmap_commons.hm_auth import AuthHelper
-from libs.ontology import Ontology, enum_val
+from libs.ontology import Ontology
 
 sys.path.append("search-adaptor/src")
 from indexer import Indexer
@@ -75,7 +76,7 @@ class Translator(TranslatorInterface):
             self.indexer = Indexer(self.indices, self.DEFAULT_INDEX_WITHOUT_PREFIX)
             self.ubkg_instance = ubkg_instance
             Ontology.set_instance(self.ubkg_instance)
-            self.entity_types = Ontology.entities(as_arr=True, cb=enum_val)
+            self.entity_types = Ontology.ops(as_arr=True, cb=enum_val).entities()
 
             logger.debug("@@@@@@@@@@@@@@@@@@@@ INDICES")
             logger.debug(self.INDICES)
@@ -664,21 +665,21 @@ class Translator(TranslatorInterface):
     def generate_display_subtype(self, entity):
         entity_type = entity['entity_type']
         display_subtype = '{unknown}'
-        Entities = Ontology.entities()
+        Entities = Ontology.ops().entities()
 
         if equals(entity_type, Entities.SOURCE):
             display_subtype = entity['source_type']
         elif equals(entity_type, Entities.SAMPLE):
             if 'sample_category' in entity:
-                if equals(entity['sample_category'], Ontology.specimen_categories().ORGAN):
+                if equals(entity['sample_category'], Ontology.ops().specimen_categories().ORGAN):
                     if 'organ' in entity:
-                        organ_types = Ontology.organ_types(as_data_dict=True, prop_callback=None)
+                        organ_types = Ontology.ops(as_data_dict=True, prop_callback=None, key='rui_code', val_key='term').organ_types()
                         display_subtype = get_val_by_key(entity['organ'], organ_types, 'ubkg.organ_types')
                     else:
                         logger.error(
                             f"Missing missing organ when sample_category is set of Sample with uuid: {entity['uuid']}")
                 else:
-                    sample_categories = Ontology.specimen_categories(as_data_dict=True, prop_callback=None)
+                    sample_categories = Ontology.ops(as_data_dict=True, prop_callback=None).specimen_categories()
                     display_subtype = get_val_by_key(entity['sample_category'], sample_categories, 'ubkg.specimen_categories')
             else:
                 logger.error(f"Missing sample_category of Sample with uuid: {entity['uuid']}")
@@ -695,7 +696,7 @@ class Translator(TranslatorInterface):
         return display_subtype
 
     def generate_doc(self, entity, return_type):
-        Entities = Ontology.entities()
+        Entities = Ontology.ops().entities()
 
         try:
             entity_id = entity['uuid']
