@@ -88,7 +88,7 @@ class AssayType(object):
         """If the assay type table has not been loaded, do so."""
         if not(cls.definitions):
             try:
-                cls.definitions = Ontology.assay_types(as_data_dict=True, prop_callback=None, data_as_val=True)
+                cls.definitions = Ontology.ops(as_data_dict=True, prop_callback=None, data_as_val=True).assay_types()
                 set_schema_base_path(SCHEMA_PATH.parent, SCHEMA_BASE_URI)
                 # Removing this call to commons with addition of UBKG ontology support
                 # assert_json_matches_schema(cls.definitions, SCHEMA_PATH)

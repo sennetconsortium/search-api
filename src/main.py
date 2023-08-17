@@ -11,7 +11,7 @@ from yaml import safe_load
 # Atlas Consortia commons
 from atlas_consortia_commons.ubkg import initialize_ubkg
 from atlas_consortia_commons.rest import *
-from libs.ontology import init_ontology
+from atlas_consortia_commons.ubkg.ubkg_sdk import init_ontology
 
 sys.path.append("search-adaptor/src")
 import libs.sennet_endpoints
