@@ -44,18 +44,6 @@ entity_properties_list = [
     'datasets'
 ]
 
-# Entity types that will have `display_subtype` generated ar index time
-# entity_types_with_display_subtype = ['Upload', 'Donor', 'Sample', 'Dataset', 'Publication']
-entity_types_with_display_subtype = ['Upload', 'Source', 'Sample', 'Dataset', 'Publication Entity']
-
-# Returns from Ontology.ops(as_arr=True, cb=enum_val).entities()
-# ['Dataset', 'Sample', 'Source', 'Publication Entity']
-
-# DATASET: str = 'Dataset'
-# PUBLICATION_ENTITY: str = 'Publication Entity'
-# SAMPLE: str = 'Sample'
-# SOURCE: str = 'Source'
-
 class Translator(TranslatorInterface):
     ACCESS_LEVEL_PUBLIC = 'public'
     ACCESS_LEVEL_CONSORTIUM = 'consortium'
