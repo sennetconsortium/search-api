@@ -44,7 +44,6 @@ entity_properties_list = [
     'datasets'
 ]
 
-
 class Translator(TranslatorInterface):
     ACCESS_LEVEL_PUBLIC = 'public'
     ACCESS_LEVEL_CONSORTIUM = 'consortium'
@@ -76,7 +75,8 @@ class Translator(TranslatorInterface):
             self.indexer = Indexer(self.indices, self.DEFAULT_INDEX_WITHOUT_PREFIX)
             self.ubkg_instance = ubkg_instance
             Ontology.set_instance(self.ubkg_instance)
-            self.entity_types = Ontology.ops(as_arr=True, cb=enum_val).entities()
+            # TODO: Remove 'Upload' once the upload entity is added to the ubkg
+            self.entity_types = Ontology.ops(as_arr=True, cb=enum_val).entities() + ['Upload']
 
             logger.debug("@@@@@@@@@@@@@@@@@@@@ INDICES")
             logger.debug(self.INDICES)
@@ -129,6 +129,7 @@ class Translator(TranslatorInterface):
             else:
                 scope_list = ['public', 'private']
         return scope_list
+
     def translate_all(self):
         with app.app_context():
             try:
@@ -137,11 +138,14 @@ class Translator(TranslatorInterface):
                 start = time.time()
 
                 # Make calls to entity-api to get a list of uuids for each entity type
-                source_uuids_list = get_uuids_by_entity_type("source", self.request_headers, self.DEFAULT_ENTITY_API_URL)
+                source_uuids_list = get_uuids_by_entity_type("source", self.request_headers,
+                                                             self.DEFAULT_ENTITY_API_URL)
                 sample_uuids_list = get_uuids_by_entity_type("sample", self.request_headers,
                                                              self.DEFAULT_ENTITY_API_URL)
                 dataset_uuids_list = get_uuids_by_entity_type("dataset", self.request_headers,
                                                               self.DEFAULT_ENTITY_API_URL)
+                upload_uuids_list = get_uuids_by_entity_type("upload", self.request_headers,
+                                                             self.DEFAULT_ENTITY_API_URL)
 
                 public_collection_uuids_list = get_uuids_by_entity_type("collection", self.request_headers,
                                                                         self.DEFAULT_ENTITY_API_URL)
@@ -149,7 +153,9 @@ class Translator(TranslatorInterface):
                 logger.debug("merging sets into a one list...")
                 # Merge into a big list that with no duplicates
                 all_entities_uuids = set(
-                    source_uuids_list + sample_uuids_list + dataset_uuids_list + public_collection_uuids_list)
+                    source_uuids_list + sample_uuids_list + dataset_uuids_list +
+                    upload_uuids_list + public_collection_uuids_list
+                )
 
                 es_uuids = []
                 # for index in ast.literal_eval(app.config['INDICES']).keys():
@@ -190,10 +196,11 @@ class Translator(TranslatorInterface):
                     public_collection_futures_list = [
                         executor.submit(self.translate_public_collection, uuid, reindex=True)
                         for uuid in public_collection_uuids_list]
+                    upload_futures_list = [executor.submit(self.translate_upload, uuid, reindex=True) for uuid in upload_uuids_list]
                     source_futures_list = [executor.submit(self.translate_tree, uuid) for uuid in source_uuids_list]
 
                     # Append the above three lists into one
-                    futures_list = public_collection_futures_list + source_futures_list
+                    futures_list = public_collection_futures_list + upload_futures_list + source_futures_list
 
                     for f in concurrent.futures.as_completed(futures_list):
                         logger.debug(f.result())
@@ -219,6 +226,8 @@ class Translator(TranslatorInterface):
 
                 if entity['entity_type'] == 'Collection':
                     self.translate_public_collection(entity_id, reindex=True)
+                elif entity['entity_type'] == 'Upload':
+                    self.translate_upload(entity_id, reindex=True)
                 else:
                     previous_revision_entity_ids = []
                     next_revision_entity_ids = []
@@ -426,6 +435,27 @@ class Translator(TranslatorInterface):
             if public_index != private_index:
                 self.indexer.delete_document(entity_id, private_index)
 
+    # When indexing, Upload WILL NEVER BE PUBLIC
+    def translate_upload(self, entity_id, reindex=False):
+        try:
+            logger.info(f"Start executing translate_upload() for {entity_id}")
+
+            default_private_index = self.INDICES['indices'][self.DEFAULT_INDEX_WITHOUT_PREFIX]['private']
+
+            # Retrieve the upload entity details
+            upload = self.call_entity_api(entity_id, 'entities')
+
+            self.add_datasets_to_entity(upload)
+            self.entity_keys_rename(upload)
+
+            # Add additional calculated fields if any applies to Upload
+            self.add_calculated_fields(upload)
+
+            self.call_indexer(upload, reindex, json.dumps(upload), default_private_index)
+
+            logger.info(f"Finished executing translate_upload() for {entity_id}")
+        except Exception as e:
+            logger.error(e)
 
     def translate_public_collection(self, entity_id, reindex=False):
         try:
@@ -545,10 +575,9 @@ class Translator(TranslatorInterface):
 
             if target_index:
                 self.indexer.index(entity['uuid'], document, target_index, reindex)
-            # elif entity['entity_type'] == 'Upload':
-            #     target_index = self.INDICES['indices'][self.DEFAULT_INDEX_WITHOUT_PREFIX]['private']
-            #
-            #     self.indexer.index(entity['uuid'], document, target_index, reindex)
+            elif entity['entity_type'] == 'Upload':
+                target_index = self.INDICES['indices'][self.DEFAULT_INDEX_WITHOUT_PREFIX]['private']
+                self.indexer.index(entity['uuid'], document, target_index, reindex)
             else:
                 # write entity into indices
                 for index in self.indices.keys():
@@ -583,6 +612,7 @@ class Translator(TranslatorInterface):
             # Log the full stack trace, prepend a line with our message
             logger.exception(msg)
 
+    # Used for Upload and Collection index
     def add_datasets_to_entity(self, entity):
         datasets = []
         if 'datasets' in entity:
@@ -688,10 +718,13 @@ class Translator(TranslatorInterface):
                 display_subtype = ','.join(entity['data_types'])
             else:
                 logger.error(f"Missing data_types of Dataset with uuid: {entity['uuid']}")
+        # TODO: Change to equals() when 'Upload' is added to the ubkg ontology
+        elif entity_type == 'Upload':
+            display_subtype = 'Data Upload'
         else:
             # Do nothing
             logger.error(
-                f"Invalid entity_type: {entity_type}. Only generate display_subtype for Source/Sample/Dataset")
+                f"Invalid entity_type: {entity_type}. Only generate display_subtype for Source/Sample/Dataset/Upload")
 
         return display_subtype
 
@@ -1045,7 +1078,7 @@ if __name__ == "__main__":
     logger.info("############# Full index via script started #############")
 
     translator.delete_and_recreate_indices(files=False)
-    # translator.delete_and_recreate_indices(files=True)
+    translator.delete_and_recreate_indices(files=True)
     translator.translate_all()
 
     # Show the failed entity-api calls and the uuids
