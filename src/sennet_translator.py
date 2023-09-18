@@ -1,6 +1,5 @@
 import concurrent.futures
 import copy
-import importlib
 import json
 import logging
 import os
@@ -75,8 +74,9 @@ class Translator(TranslatorInterface):
             self.indexer = Indexer(self.indices, self.DEFAULT_INDEX_WITHOUT_PREFIX)
             self.ubkg_instance = ubkg_instance
             Ontology.set_instance(self.ubkg_instance)
-            # TODO: Remove 'Upload' once the upload entity is added to the ubkg
-            self.entity_types = Ontology.ops(as_arr=True, cb=enum_val).entities() + ['Upload']
+
+            self.entity_types = Ontology.ops(as_arr=True, cb=enum_val).entities()
+            self.entities = Ontology.ops().entities()
 
             logger.debug("@@@@@@@@@@@@@@@@@@@@ INDICES")
             logger.debug(self.INDICES)
@@ -226,7 +226,7 @@ class Translator(TranslatorInterface):
 
                 if entity['entity_type'] == 'Collection':
                     self.translate_public_collection(entity_id, reindex=True)
-                elif entity['entity_type'] == 'Upload':
+                elif equals(entity['entity_type'], self.entities.UPLOAD):
                     self.translate_upload(entity_id, reindex=True)
                 else:
                     previous_revision_entity_ids = []
@@ -575,7 +575,7 @@ class Translator(TranslatorInterface):
 
             if target_index:
                 self.indexer.index(entity['uuid'], document, target_index, reindex)
-            elif entity['entity_type'] == 'Upload':
+            elif equals(entity['entity_type'], self.entities.UPLOAD):
                 target_index = self.INDICES['indices'][self.DEFAULT_INDEX_WITHOUT_PREFIX]['private']
                 self.indexer.index(entity['uuid'], document, target_index, reindex)
             else:
@@ -695,11 +695,10 @@ class Translator(TranslatorInterface):
     def generate_display_subtype(self, entity):
         entity_type = entity['entity_type']
         display_subtype = '{unknown}'
-        Entities = Ontology.ops().entities()
 
-        if equals(entity_type, Entities.SOURCE):
+        if equals(entity_type, self.entities.SOURCE):
             display_subtype = entity['source_type']
-        elif equals(entity_type, Entities.SAMPLE):
+        elif equals(entity_type, self.entities.SAMPLE):
             if 'sample_category' in entity:
                 if equals(entity['sample_category'], Ontology.ops().specimen_categories().ORGAN):
                     if 'organ' in entity:
@@ -713,13 +712,12 @@ class Translator(TranslatorInterface):
                     display_subtype = get_val_by_key(entity['sample_category'], sample_categories, 'ubkg.specimen_categories')
             else:
                 logger.error(f"Missing sample_category of Sample with uuid: {entity['uuid']}")
-        elif equals(entity_type, Entities.DATASET):
+        elif equals(entity_type, self.entities.DATASET):
             if 'data_types' in entity:
                 display_subtype = ','.join(entity['data_types'])
             else:
                 logger.error(f"Missing data_types of Dataset with uuid: {entity['uuid']}")
-        # TODO: Change to equals() when 'Upload' is added to the ubkg ontology
-        elif entity_type == 'Upload':
+        elif equals(entity_type, self.entities.UPLOAD):
             display_subtype = 'Data Upload'
         else:
             # Do nothing
@@ -729,12 +727,10 @@ class Translator(TranslatorInterface):
         return display_subtype
 
     def generate_doc(self, entity, return_type):
-        Entities = Ontology.ops().entities()
-
         try:
             entity_id = entity['uuid']
 
-            if entity['entity_type'] != 'Upload':
+            if not equals(entity['entity_type'], self.entities.UPLOAD):
                 ancestors = []
                 descendants = []
                 ancestor_ids = []
@@ -755,7 +751,7 @@ class Translator(TranslatorInterface):
                 # Find the Source
                 source = None
                 for a in ancestors:
-                    if a['entity_type'] == 'Source':
+                    if equals(a['entity_type'], self.entities.SOURCE):
                         source = copy.copy(a)
                         break
 
@@ -787,16 +783,24 @@ class Translator(TranslatorInterface):
                 # Add new properties
                 entity['source'] = source
 
-                entity['origin_sample'] = copy.copy(entity) if ('sample_category' in entity) and (
-                        entity['sample_category'].lower() == 'organ') and ('organ' in entity) and (
-                                                                       entity['organ'].strip() != '') else None
+                sample_categories = Ontology.ops().specimen_categories()
+
+                entity['origin_sample'] = None 
+                if ('sample_category' in entity and
+                    'organ' in entity and
+                    entity['organ'].strip() != '' and
+                    equals(entity['sample_category'], sample_categories.ORGAN)):
+                    entity['origin_sample'] = copy.copy(entity) 
 
                 if entity['origin_sample'] is None:
                     try:
                         # The origin_sample is the ancestor which `sample_category` is "organ" and the `organ` code is set
-                        entity['origin_sample'] = copy.copy(next(a for a in ancestors if ('sample_category' in a) and (
-                                a['sample_category'].lower() == 'organ') and ('organ' in a) and (
-                                                                         a['organ'].strip() != '')))
+                        itr = next(a for a in ancestors
+                                   if ('sample_category' in a and
+                                       'organ' in a and
+                                       a['organ'].strip() != '' and
+                                       equals(a['sample_category'], sample_categories.ORGAN)))
+                        entity['origin_sample'] = copy.copy(itr)
                     except StopIteration:
                         entity['origin_sample'] = {}
 
@@ -811,8 +815,7 @@ class Translator(TranslatorInterface):
 
                         try:
                             # Why?
-                            if parents[0]['entity_type'] == 'Sample':
-                                # entity['source_sample'] = parents[0]
+                            if equals(parents[0]['entity_type'], self.entities.SAMPLE):
                                 entity['source_sample'] = parents
 
                             e = parents[0]
@@ -820,7 +823,7 @@ class Translator(TranslatorInterface):
                             entity['source_sample'] = {}
 
                     # Move files to the root level if exist
-                    if 'metadata' in entity and equals(entity['entity_type'], Entities.DATASET):
+                    if 'metadata' in entity and equals(entity['entity_type'], self.entities.DATASET):
                         metadata = entity['metadata']
                         if 'files' in metadata:
                             entity['files'] = metadata['files']
