@@ -198,6 +198,9 @@
     "pipeline_message": {
       "es_name": "pipeline_message"
     },
+    "validation_message": {
+      "es_name": "validation_message"
+    },
     "ingest_id": {
       "es_name": "ingest_id"
     },
