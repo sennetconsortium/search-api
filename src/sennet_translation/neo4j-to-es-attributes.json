@@ -206,6 +206,9 @@
     },
     "run_id": {
       "es_name": "run_id"
+    },
+    "upload": {
+      "es_name": "upload"
     }
   }
 }
