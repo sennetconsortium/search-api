@@ -830,19 +830,6 @@ class Translator(TranslatorInterface):
 
             self.entity_keys_rename(entity)
 
-            # Is group_uuid always set?
-            # In case if group_name not set
-            if ('group_uuid' in entity) and ('group_name' not in entity):
-                group_uuid = entity['group_uuid']
-
-                # Get the globus groups info based on the groups json file in commons package
-                globus_groups_info = self.auth_helper.get_globus_groups_info()
-                groups_by_id_dict = globus_groups_info['by_id']
-                group_dict = groups_by_id_dict[group_uuid]
-
-                # Add new property
-                entity['group_name'] = group_dict['displayname']
-
             # Remove the `files` element from the entity['metadata'] dict
             # to reduce the doc size to be indexed?
             if ('metadata' in entity) and ('files' in entity['metadata']):

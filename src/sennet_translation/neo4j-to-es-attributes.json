@@ -114,6 +114,9 @@
     "protocol_url": {
       "es_name": "protocol_url"
     },
+     "group_name": {
+      "es_name": "group_name"
+    },
     "group_uuid": {
       "es_name": "group_uuid"
     },
