@@ -241,9 +241,10 @@ class Translator(TranslatorInterface):
                                                                             'uuid')
                         next_revision_entity_ids = self.call_entity_api(entity_id, 'next_revisions', 'uuid')
 
-                    # All entity_ids in the path excluding the entity itself
+                    # Need to flatten previous and next revision lists
                     previous_revisions = [item for sublist in previous_revision_entity_ids for item in sublist]
                     next_revisions = [item for sublist in next_revision_entity_ids for item in sublist]
+                    # All entity_ids in the path excluding the entity itself
                     entity_ids = ancestor_entity_ids + descendant_entity_ids + previous_revisions + next_revisions
 
                     self.call_indexer(entity)
@@ -929,7 +930,7 @@ class Translator(TranslatorInterface):
 
         return response.json()
 
-    def get_multi_revisions(self, entity_id, endpoint, include_dataset=None):
+    def get_multi_revisions(self, entity_id, include_dataset=None):
         url = self.entity_api_url + "/datasets/" + entity_id + "/multi-revisions"
         if include_dataset:
             url += "?include_dataset=true"
