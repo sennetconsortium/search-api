@@ -706,6 +706,7 @@ class Translator(TranslatorInterface):
                 if equals(entity['sample_category'], Ontology.ops().specimen_categories().ORGAN):
                     if 'organ' in entity:
                         organ_types = Ontology.ops(as_data_dict=True, prop_callback=None, key='rui_code', val_key='term').organ_types()
+                        organ_types['OT'] = 'Other'
                         display_subtype = get_val_by_key(entity['organ'], organ_types, 'ubkg.organ_types')
                     else:
                         logger.error(
