@@ -114,7 +114,7 @@
     "protocol_url": {
       "es_name": "protocol_url"
     },
-     "group_name": {
+    "group_name": {
       "es_name": "group_name"
     },
     "group_uuid": {
@@ -137,6 +137,12 @@
     },
     "previous_revision_uuid": {
       "es_name": "previous_revision_uuid"
+    },
+    "next_revision_uuids": {
+      "es_name": "next_revision_uuids"
+    },
+    "previous_revision_uuids": {
+      "es_name": "previous_revision_uuids"
     },
     "thumbnail_file": {
       "es_name": "thumbnail_file"
