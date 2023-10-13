@@ -242,7 +242,9 @@ class Translator(TranslatorInterface):
                         next_revision_entity_ids = self.call_entity_api(entity_id, 'next_revisions', 'uuid')
 
                     # All entity_ids in the path excluding the entity itself
-                    entity_ids = ancestor_entity_ids + descendant_entity_ids + previous_revision_entity_ids + next_revision_entity_ids
+                    previous_revisions = [item for sublist in previous_revision_entity_ids for item in sublist]
+                    next_revisions = [item for sublist in next_revision_entity_ids for item in sublist]
+                    entity_ids = ancestor_entity_ids + descendant_entity_ids + previous_revisions + next_revisions
 
                     self.call_indexer(entity)
 
@@ -828,6 +830,12 @@ class Translator(TranslatorInterface):
                         if 'files' in metadata:
                             entity['files'] = metadata['files']
 
+                    # Add multi-revisions
+                    if 'next_revision_uuid' in entity or 'previous_revision_uuid' in entity:
+                        multi_revisions = self.get_multi_revisions(entity_id, True)
+                        if multi_revisions:
+                            entity['multi_revisions'] = multi_revisions
+
             self.entity_keys_rename(entity)
 
             # Remove the `files` element from the entity['metadata'] dict
@@ -910,6 +918,35 @@ class Translator(TranslatorInterface):
             logger.debug(response.status_code)
 
             logger.debug("======call_entity_api() response text from entity-api======")
+            logger.debug(response.text)
+
+            # Bubble up the error message from entity-api instead of sys.exit(msg)
+            # The caller will need to handle this exception
+            response.raise_for_status()
+            raise requests.exceptions.RequestException(response.text)
+
+        self.entity_api_cache[url] = response.json()
+
+        return response.json()
+
+    def get_multi_revisions(self, entity_id, endpoint, include_dataset=None):
+        url = self.entity_api_url + "/datasets/" + entity_id + "/multi-revisions"
+        if include_dataset:
+            url += "?include_dataset=true"
+
+        if url in self.entity_api_cache:
+            return copy.copy(self.entity_api_cache[url])
+
+        response = requests.get(url, headers=self.request_headers, verify=False)
+        if response.status_code != 200:
+            msg = f"SenNet translator get_multi_revisions() failed to get entity of uuid {entity_id} via entity-api"
+            # Log the full stack trace, prepend a line with our message
+            logger.exception(msg)
+
+            logger.debug("======get_multi_revisions() status code from entity-api======")
+            logger.debug(response.status_code)
+
+            logger.debug("======get_multi_revisions() response text from entity-api======")
             logger.debug(response.text)
 
             # Bubble up the error message from entity-api instead of sys.exit(msg)
