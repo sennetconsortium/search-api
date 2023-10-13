@@ -144,6 +144,9 @@
     "previous_revision_uuids": {
       "es_name": "previous_revision_uuids"
     },
+    "multi_revisions": {
+      "es_name": "multi_revisions"
+    },
     "thumbnail_file": {
       "es_name": "thumbnail_file"
     },
