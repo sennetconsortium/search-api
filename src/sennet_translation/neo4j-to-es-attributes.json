@@ -75,6 +75,18 @@
     "description": {
       "es_name": "description"
     },
+    "abstract": {
+      "es_name": "abstract"
+    },
+    "purpose": {
+      "es_name": "purpose"
+    },
+    "method": {
+      "es_name": "method"
+    },
+    "result": {
+      "es_name": "result"
+    },
     "ingest_metadata": {
       "es_name": "metadata"
     },
