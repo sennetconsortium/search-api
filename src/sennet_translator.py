@@ -687,6 +687,19 @@ class Translator(TranslatorInterface):
         if entity['entity_type'] in self.entity_types:
             entity['display_subtype'] = self.generate_display_subtype(entity)
 
+        # Add has rui information for all non-organ samples and datasets
+        if (entity['entity_type'] in ['Sample', 'Dataset']
+                and entity.get('sample_category') != 'Organ'):
+            ancestors = entity.get('ancestors', [])
+            has_rui = ('rui_location' in entity or
+                       len([a for a in ancestors if 'rui_location' in a]) > 0)
+            if has_rui:
+                organs = set([a['organ'] for a in ancestors if 'organ' in a])
+                if len(organs.intersection({'AD', 'BD', 'BM', 'BS', 'MU', 'OT'})) > 0:
+                    # Has an organ that is not supported
+                    has_rui = 'N/A'
+            entity['has_rui_information'] = str(has_rui)
+
     # For Upload, Dataset, Source and Sample objects:
     # add a calculated (not stored in Neo4j) field called `display_subtype` to
     # all Elasticsearch documents of the above types with the following rules:
