@@ -707,14 +707,14 @@ class Translator(TranslatorInterface):
         if (entity['entity_type'] in ['Sample', 'Dataset']
                 and entity.get('sample_category') != 'Organ'):
             ancestors = entity.get('ancestors', [])
-            has_rui = ('rui_location' in entity or
-                       len([a for a in ancestors if 'rui_location' in a]) > 0)
-            if has_rui:
-                organs = set([a['organ'] for a in ancestors if 'organ' in a])
-                if len(organs.intersection({'AD', 'BD', 'BM', 'BS', 'MU', 'OT'})) > 0:
-                    # Has an organ that is not supported
-                    has_rui = 'N/A'
-            entity['has_rui_information'] = str(has_rui)
+            organs = set([a['organ'] for a in ancestors if 'organ' in a])
+            if len(organs.intersection({'AD', 'BD', 'BM', 'BS', 'MU', 'OT'})) > 0:
+                # Has an organ ancestor that is not supported
+                entity['has_rui_information'] = 'N/A'
+            else:
+                has_rui = ('rui_location' in entity or
+                           len([a for a in ancestors if 'rui_location' in a]) > 0)
+                entity['has_rui_information'] = str(has_rui)
 
     # For Upload, Dataset, Source and Sample objects:
     # add a calculated (not stored in Neo4j) field called `display_subtype` to
