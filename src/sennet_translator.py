@@ -705,7 +705,8 @@ class Translator(TranslatorInterface):
 
         # Add has rui information for all non-organ samples and datasets
         if (entity['entity_type'] in ['Sample', 'Dataset']
-                and entity.get('sample_category') != 'Organ'):
+                and entity.get('sample_category') != 'Organ'
+                and entity.get('source', {}).get('source_type') in ['Human', 'Human Organoid']):
             ancestors = entity.get('ancestors', [])
             organs = set([a['organ'] for a in ancestors if 'organ' in a])
             if len(organs.intersection({'AD', 'BD', 'BM', 'BS', 'MU', 'OT'})) > 0:
