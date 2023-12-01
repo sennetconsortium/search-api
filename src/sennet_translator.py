@@ -702,7 +702,7 @@ class Translator(TranslatorInterface):
                            len([a for a in ancestors if 'rui_location' in a]) > 0)
                 entity['has_rui_information'] = str(has_rui)
 
-        last_touch = entity['last_modified_timestamp'] if entity['published_timestamp'] is None else entity['published_timestamp']
+        last_touch = entity['published_timestamp'] if 'published_timestamp' in entity else entity['last_modified_timestamp']
         entity['last_touch'] = str(datetime.datetime.utcfromtimestamp(last_touch/1000))
 
     # For Upload, Dataset, Source and Sample objects:
