@@ -225,8 +225,8 @@
     "assigned_to_group_name": {
       "es_name": "assigned_to_group_name"
     },
-    "ingest_tasks": {
-      "es_name": "ingest_tasks"
+    "ingest_task": {
+      "es_name": "ingest_task"
     }
   }
 }
