@@ -221,6 +221,12 @@
     },
     "upload": {
       "es_name": "upload"
+    },
+    "assigned_to_group_name": {
+      "es_name": "assigned_to_group_name"
+    },
+    "ingest_tasks": {
+      "es_name": "ingest_tasks"
     }
   }
 }
