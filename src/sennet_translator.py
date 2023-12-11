@@ -751,6 +751,9 @@ class Translator(TranslatorInterface):
             else:
                 logger.error(f"Missing sample_category of Sample with uuid: {entity['uuid']}")
         elif equals(entity_type, self.entities.DATASET):
+            # if 'dataset_type' in entity:
+            #     display_subtype = entity['dataset_type']
+            # TODO: Remove this block of code with:
             if 'data_types' in entity:
                 display_subtype = ','.join(entity['data_types'])
             else:
