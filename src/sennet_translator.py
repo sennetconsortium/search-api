@@ -721,6 +721,18 @@ class Translator(TranslatorInterface):
         last_touch = entity['published_timestamp'] if 'published_timestamp' in entity else entity['last_modified_timestamp']
         entity['last_touch'] = str(datetime.datetime.utcfromtimestamp(last_touch/1000))
 
+        # Add dataset category
+        if entity['entity_type'] == 'Dataset' and 'creation_action' in entity:
+            dataset_category_map = {
+                'Create Dataset Activity': 'primary',
+                'Multi-Assay Split': 'component',
+                'Central Process': 'codcc-processed',
+                'Lab Process': 'lab-processed',
+            }
+            if dataset_category := dataset_category_map.get(entity['creation_action']):
+                entity['dataset_category'] = dataset_category
+
+
     # For Upload, Dataset, Source and Sample objects:
     # add a calculated (not stored in Neo4j) field called `display_subtype` to
     # all Elasticsearch documents of the above types with the following rules:
