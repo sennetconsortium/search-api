@@ -233,6 +233,9 @@
     },
     "ingest_task": {
       "es_name": "ingest_task"
+    },
+    "creation_action": {
+      "es_name": "creation_action"
     }
   }
 }
