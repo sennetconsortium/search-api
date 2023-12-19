@@ -13,7 +13,7 @@ PyYAML==5.4.1
 # Default is main branch specified in search-api's docker-compose.development.yml if not set
 # git+https://github.com/hubmapconsortium/commons.git@${COMMONS_BRANCH}#egg=hubmap-commons
 hubmap-commons==2.1.12
-atlas-consortia-commons==1.0.5
+atlas-consortia-commons==1.0.6
 
 # Test dependencies
 pytest==7.3.1

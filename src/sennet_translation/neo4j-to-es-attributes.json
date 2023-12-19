@@ -21,6 +21,9 @@
     "created_timestamp": {
       "es_name": "created_timestamp"
     },
+    "creation_action": {
+      "es_name": "creation_action"
+    },
     "uuid": {
       "es_name": "uuid"
     },
@@ -71,6 +74,9 @@
     },
     "data_types": {
       "es_name": "data_types"
+    },
+    "dataset_type": {
+      "es_name": "dataset_type"
     },
     "description": {
       "es_name": "description"
