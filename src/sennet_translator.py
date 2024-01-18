@@ -873,7 +873,8 @@ class Translator(TranslatorInterface):
 
                     # Move files to the root level if exist
                     if 'metadata' in entity and equals(entity['entity_type'], self.entities.DATASET):
-                        metadata = entity['metadata']
+                        # Because we remove files from metadata later (to reduce size) we need to shallow copy of metadata
+                        metadata = copy.copy(entity['metadata'])
                         if 'files' in metadata:
                             entity['files'] = metadata['files']
 
@@ -886,7 +887,6 @@ class Translator(TranslatorInterface):
             self.entity_keys_rename(entity)
 
             # Remove the `files` element from the entity['metadata'] dict
-            # to reduce the doc size to be indexed?
             if ('metadata' in entity) and ('files' in entity['metadata']):
                 entity['metadata'].pop('files')
 
