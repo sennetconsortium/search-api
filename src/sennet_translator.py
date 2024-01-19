@@ -872,10 +872,12 @@ class Translator(TranslatorInterface):
                             entity['source_sample'] = {}
 
                     # Move files to the root level if exist
-                    if 'metadata' in entity and equals(entity['entity_type'], self.entities.DATASET):
-                        metadata = entity['metadata']
+                    if 'ingest_metadata' in entity and equals(entity['entity_type'], self.entities.DATASET):
+                        # Because we remove files from metadata later (to reduce size) we need to shallow copy of metadata
+                        metadata = copy.copy(entity['ingest_metadata'])
                         if 'files' in metadata:
                             entity['files'] = metadata['files']
+                            entity['ingest_metadata'].pop('files')
 
                     # Add multi-revisions
                     if 'next_revision_uuid' in entity or 'previous_revision_uuid' in entity:
@@ -884,11 +886,6 @@ class Translator(TranslatorInterface):
                             entity['multi_revisions'] = multi_revisions
 
             self.entity_keys_rename(entity)
-
-            # Remove the `files` element from the entity['metadata'] dict
-            # to reduce the doc size to be indexed?
-            if ('metadata' in entity) and ('files' in entity['metadata']):
-                entity['metadata'].pop('files')
 
 
             if entity.get('origin_sample', None):
