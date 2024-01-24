@@ -41,7 +41,8 @@ entity_properties_list = [
     'files',
     'immediate_ancestors',
     'immediate_descendants',
-    'datasets'
+    'datasets',
+    'entities'
 ]
 
 class Translator(TranslatorInterface):
