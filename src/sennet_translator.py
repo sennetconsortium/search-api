@@ -41,7 +41,8 @@ entity_properties_list = [
     'files',
     'immediate_ancestors',
     'immediate_descendants',
-    'datasets'
+    'datasets',
+    'entities'
 ]
 
 class Translator(TranslatorInterface):
@@ -461,7 +462,7 @@ class Translator(TranslatorInterface):
             # Retrieve the upload entity details
             upload = self.call_entity_api(entity_id, 'entities')
 
-            self.add_datasets_to_entity(upload)
+            self.add_entities_to_entity(upload)
             self.entity_keys_rename(upload)
 
             # Add additional calculated fields if any applies to Upload
@@ -483,7 +484,7 @@ class Translator(TranslatorInterface):
         try:
             collection = self.get_collection(entity_id=entity_id)
 
-            self.add_datasets_to_entity(collection)
+            self.add_entities_to_entity(collection)
             self.entity_keys_rename(collection)
 
             # Add additional calculated fields if any applies to Collection
@@ -633,27 +634,35 @@ class Translator(TranslatorInterface):
             logger.exception(msg)
 
     # Used for Upload and Collection index
-    def add_datasets_to_entity(self, entity):
-        datasets = []
-        if 'datasets' in entity:
-            for dataset in entity['datasets']:
+    def add_entities_to_entity(self, entity):
+        entities = []
+
+        def handle_doc(key):
+            for _entity in entity[key]:
                 # Retrieve the entity details
-                dataset = self.call_entity_api(dataset['uuid'], 'entities')
+                _entity = self.call_entity_api(_entity['uuid'], 'entities')
 
-                dataset_doc = self.generate_doc(dataset, 'dict')
-                dataset_doc.pop('ancestors')
-                dataset_doc.pop('ancestor_ids')
-                dataset_doc.pop('descendants')
-                dataset_doc.pop('descendant_ids')
-                dataset_doc.pop('immediate_descendants')
-                dataset_doc.pop('immediate_ancestors')
-                dataset_doc.pop('source')
-                # dataset_doc.pop('origin_sample')
-                dataset_doc.pop('source_sample')
+                entity_doc = self.generate_doc(_entity, 'dict')
+                entity_doc.pop('ancestors')
+                entity_doc.pop('ancestor_ids')
+                entity_doc.pop('descendants')
+                entity_doc.pop('descendant_ids')
+                entity_doc.pop('immediate_descendants')
+                entity_doc.pop('immediate_ancestors')
+                entity_doc.pop('source')
+                # entity_doc.pop('origin_sample')
+                if 'source_sample' in entity_doc:
+                    entity_doc.pop('source_sample')
 
-                datasets.append(dataset_doc)
+                entities.append(entity_doc)
 
-        entity['datasets'] = datasets
+            entity[key] = entities
+
+        if 'datasets' in entity:
+            handle_doc('datasets')
+
+        if 'entities' in entity:
+            handle_doc('entities')
 
     def entity_keys_rename(self, entity):
         logger.info("Start executing entity_keys_rename()")
