@@ -658,21 +658,18 @@ class Translator(TranslatorInterface):
 
             entity[key] = entities
 
-        def default_to_empty():
-            if entity['entity_type'] == 'Upload':
-                entity['datasets'] = []
-            else:
-                entity['entities'] = []
+        def default_to_empty(key):
+            entity[key] = []
 
         if 'datasets' in entity:
             handle_doc('datasets')
         else:
-            default_to_empty()
+            default_to_empty('datasets')
 
         if 'entities' in entity:
             handle_doc('entities')
         else:
-            default_to_empty()
+            default_to_empty('entities')
 
     def entity_keys_rename(self, entity):
         logger.info("Start executing entity_keys_rename()")
