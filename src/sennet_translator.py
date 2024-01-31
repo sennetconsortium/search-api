@@ -252,8 +252,13 @@ class Translator(TranslatorInterface):
                     # Need to flatten previous and next revision lists
                     previous_revisions = [item for sublist in previous_revision_entity_ids for item in sublist]
                     next_revisions = [item for sublist in next_revision_entity_ids for item in sublist]
+
                     # All entity_ids in the path excluding the entity itself
                     entity_ids = ancestor_entity_ids + descendant_entity_ids + previous_revisions + next_revisions
+
+                    if 'upload' in entity and 'uuid' in entity['upload']:
+                        # Reindex upload associated with this entity
+                        entity_ids.append(entity['upload']['uuid'])
 
                     self.call_indexer(entity)
 
