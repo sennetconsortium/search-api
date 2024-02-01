@@ -242,6 +242,7 @@ class Translator(TranslatorInterface):
 
                     ancestor_entity_ids = self.call_entity_api(entity_id, 'ancestors', 'uuid')
                     descendant_entity_ids = self.call_entity_api(entity_id, 'descendants', 'uuid')
+                    related_entity_ids = self.get_related_entities(entity)
 
                     # Only Dataset entities may have previous/next revisions
                     if entity['entity_type'] in ['Dataset', 'Publication']:
@@ -254,11 +255,7 @@ class Translator(TranslatorInterface):
                     next_revisions = [item for sublist in next_revision_entity_ids for item in sublist]
 
                     # All entity_ids in the path excluding the entity itself
-                    entity_ids = ancestor_entity_ids + descendant_entity_ids + previous_revisions + next_revisions
-
-                    if 'upload' in entity and 'uuid' in entity['upload']:
-                        # Reindex upload associated with this entity
-                        entity_ids.append(entity['upload']['uuid'])
+                    entity_ids = ancestor_entity_ids + descendant_entity_ids + previous_revisions + next_revisions + related_entity_ids
 
                     self.call_indexer(entity)
 
@@ -1094,6 +1091,25 @@ class Translator(TranslatorInterface):
             self.indexer.delete_index(index)
         except Exception as e:
             pass
+
+    def get_related_entities(self, entity):
+        """Get the related collection and upload uuids
+
+        Args:
+            entity (dict): The entity
+
+        Returns:
+            list: A list of related entity uuids
+        """
+        uuids = []
+        if 'collections' in entity:
+            uuids = [c['uuid'] for c in entity['collections']]
+
+        if 'upload' in entity and 'uuid' in entity['upload']:
+            # Reindex upload associated with this entity
+            uuids.append(entity['upload']['uuid'])
+
+        return uuids
 
 
 def get_val_by_key(type_code, data, source_data_name):
