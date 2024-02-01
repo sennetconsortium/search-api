@@ -9,8 +9,8 @@ import time
 from atlas_consortia_commons.string import equals
 from atlas_consortia_commons.object import enum_val
 from atlas_consortia_commons.ubkg import initialize_ubkg
-from requests import HTTPError
 from yaml import safe_load
+import requests
 
 from flask import Flask, Response
 
@@ -218,7 +218,7 @@ class Translator(TranslatorInterface):
             # Retrieve the entity details
             try:
                 entity = self.call_entity_api(entity_id, 'entities')
-            except HTTPError:
+            except requests.HTTPError:
                 entity = self.call_entity_api(entity_id, 'collections')
 
             # Check if entity is empty
