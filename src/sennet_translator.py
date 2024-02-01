@@ -256,6 +256,9 @@ class Translator(TranslatorInterface):
                     # All entity_ids in the path excluding the entity itself
                     entity_ids = ancestor_entity_ids + descendant_entity_ids + previous_revisions + next_revisions
 
+                    collection_ids = [c['uuid'] for c in entity.get('collections', [])]
+                    upload_id = entity['upload']['uuid'] if 'upload' in entity else None
+
                     self.call_indexer(entity)
 
                     # Reindex the rest of the entities in the list
@@ -265,14 +268,11 @@ class Translator(TranslatorInterface):
 
                         self.call_indexer(node, True)
 
-                    if 'collections' in entity:
-                        # Reindex collections associated with this entity
-                        for c in entity['collections']:
-                            self.translate_collection(c['uuid'])
+                    for collection_id in collection_ids:
+                        self.translate_collection(collection_id, reindex=True)
 
-                    if 'upload' in entity and 'uuid' in entity['upload']:
-                        # Reindex upload associated with this entity
-                        self.translate_upload(entity['upload']['uuid'])
+                    if upload_id:
+                        self.translate_upload(upload_id, reindex=True)
 
                 logger.info("################reindex() DONE######################")
 
