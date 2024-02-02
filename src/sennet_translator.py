@@ -9,8 +9,8 @@ import time
 from atlas_consortia_commons.string import equals
 from atlas_consortia_commons.object import enum_val
 from atlas_consortia_commons.ubkg import initialize_ubkg
-from requests import HTTPError
 from yaml import safe_load
+import requests
 
 from flask import Flask, Response
 
@@ -219,7 +219,7 @@ class Translator(TranslatorInterface):
             # Retrieve the entity details
             try:
                 entity = self.call_entity_api(entity_id, 'entities')
-            except HTTPError:
+            except requests.HTTPError:
                 entity = self.call_entity_api(entity_id, 'collections')
 
             # Check if entity is empty
@@ -253,8 +253,12 @@ class Translator(TranslatorInterface):
                     # Need to flatten previous and next revision lists
                     previous_revisions = [item for sublist in previous_revision_entity_ids for item in sublist]
                     next_revisions = [item for sublist in next_revision_entity_ids for item in sublist]
+
                     # All entity_ids in the path excluding the entity itself
                     entity_ids = ancestor_entity_ids + descendant_entity_ids + previous_revisions + next_revisions
+
+                    collection_ids = [c['uuid'] for c in entity.get('collections', [])]
+                    upload_id = entity['upload']['uuid'] if 'upload' in entity else None
 
                     self.call_indexer(entity)
 
@@ -264,6 +268,12 @@ class Translator(TranslatorInterface):
                         node = self.call_entity_api(entity_entity_id, 'entities')
 
                         self.call_indexer(node, True)
+
+                    for collection_id in collection_ids:
+                        self.translate_collection(collection_id, reindex=True)
+
+                    if upload_id:
+                        self.translate_upload(upload_id, reindex=True)
 
                 logger.info("################reindex() DONE######################")
 
