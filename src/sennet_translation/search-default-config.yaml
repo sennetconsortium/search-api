@@ -15,6 +15,14 @@ mappings:
             keyword:
               type: keyword
     -
+      organ_donor_data:
+        path_match: "*.organ_donor_data.data_value"
+        mapping:
+          type: text
+          fields:
+            keyword:
+              type: keyword
+    -
       metadata_value_fields:
         match_pattern: "regex"
         match: "^(.*_value)$"
