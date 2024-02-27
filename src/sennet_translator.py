@@ -681,8 +681,12 @@ class Translator(TranslatorInterface):
         else:
             default_to_empty('entities')
 
-    def entity_keys_rename(self, entity):
+    def entity_keys_rename(self, entity, remove_metadata=False):
         logger.info("Start executing entity_keys_rename()")
+
+        entity_properties_list_copy = copy.copy(entity_properties_list)
+        if remove_metadata:
+            entity_properties_list_copy.remove('metadata')
 
         # logger.debug("==================entity before renaming keys==================")
         # logger.debug(entity)
@@ -708,8 +712,13 @@ class Translator(TranslatorInterface):
 
                 temp[self.attr_map['ENTITY'][key]['es_name']] = temp_val
 
+                # If remove_metadata is True then we want to remove any property that contains "metadata"
+                if remove_metadata and 'metadata' in key:
+                    logger.info(f"Key being removed: {key}")
+                    temp.pop(self.attr_map['ENTITY'][key]['es_name'], None)
+
         for key in to_delete_keys:
-            if key not in entity_properties_list:
+            if key not in entity_properties_list_copy:
                 entity.pop(key)
 
         entity.update(temp)
@@ -857,6 +866,7 @@ class Translator(TranslatorInterface):
             if entity['entity_type'] in ['Sample', 'Dataset', 'Publication']:
                 # Add new properties
                 entity['source'] = source
+                self.entity_keys_rename(entity.get('source'), True)
 
                 sample_categories = Ontology.ops().specimen_categories()
 
@@ -924,13 +934,13 @@ class Translator(TranslatorInterface):
                     self.entity_keys_rename(a)
             if entity.get('descendants', None):
                 for d in entity.get('descendants', None):
-                    self.entity_keys_rename(d)
+                    self.entity_keys_rename(d, True)
             if entity.get('immediate_descendants', None):
                 for parent in entity.get('immediate_descendants', None):
-                    self.entity_keys_rename(parent)
+                    self.entity_keys_rename(parent, True)
             if entity.get('immediate_ancestors', None):
                 for child in entity.get('immediate_ancestors', None):
-                    self.entity_keys_rename(child)
+                    self.entity_keys_rename(child, True)
 
             remove_specific_key_entry(entity, "other_metadata")
 
