@@ -7,6 +7,7 @@ import os
 import sys
 import time
 import urllib.parse
+from typing import Optional
 
 import requests
 from atlas_consortia_commons.object import enum_val
@@ -730,21 +731,33 @@ class Translator(TranslatorInterface):
 
         logger.info("Finished executing entity_keys_rename()")
 
-    def _get_ontology_label(self, uberon_url):
-        if uberon_url in self.ontology_lookup_cache:
-            return self.ontology_lookup_cache[uberon_url]
+    def _get_ontology_label(self, ann_url: str) -> Optional[str]:
+        """Get the label from the appropriate ontology lookup service.
+
+        Args:
+            ann_url (str): The annotation url.
+
+        Returns:
+            Optional[str]: The label if found, otherwise None.
+        """
+        if ann_url in self.ontology_lookup_cache:
+            return self.ontology_lookup_cache[ann_url]
+
+        host = urllib.parse.urlparse(ann_url).hostname
+        if host != 'purl.obolibrary.org':
+            return None
 
         # service requires double encoded url???
-        encoded_uberon_url = urllib.parse.quote(uberon_url, safe='')
-        encoded_uberon_url = urllib.parse.quote(encoded_uberon_url, safe='')
+        enc_ann_url = urllib.parse.quote(ann_url, safe='')
+        enc_ann_url = urllib.parse.quote(enc_ann_url, safe='')
 
-        url = f"https://www.ebi.ac.uk/ols4/api/ontologies/uberon/terms/{encoded_uberon_url}"
+        url = f"https://www.ebi.ac.uk/ols4/api/ontologies/uberon/terms/{enc_ann_url}"
         res = requests.get(url)
         if res.status_code != 200:
-            return ''
+            return None
 
-        label = res.json().get('label', '')
-        self.ontology_lookup_cache[uberon_url] = label  # cache the result
+        label = res.json().get('label')
+        self.ontology_lookup_cache[ann_url] = label  # cache the result
         return label
 
     # These calculated fields are not stored in neo4j but will be generated
@@ -774,11 +787,14 @@ class Translator(TranslatorInterface):
         # Add rui information anatomical location
         if 'rui_location' in entity:
             rui_location = json.loads(entity['rui_location'])
-            labels = [
-                self._get_ontology_label(url)
-                for url in rui_location.get("ccf_annotations", [])
-            ]
-            entity['rui_location_anatomical_locations'] = labels
+            if 'ccf_annotations' in rui_location:
+                annotation_urls = rui_location['ccf_annotations']
+                labels = [
+                    label
+                    for url in annotation_urls
+                    if (label := self._get_ontology_label(url))
+                ]
+                entity['rui_location_anatomical_locations'] = labels
 
         # Add last touch
         last_touch = entity['published_timestamp'] if 'published_timestamp' in entity else entity['last_modified_timestamp']
