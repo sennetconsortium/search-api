@@ -1,5 +1,6 @@
 import concurrent.futures
 import copy
+import datetime
 import json
 import logging
 import os
@@ -7,26 +8,25 @@ import sys
 import time
 import urllib.parse
 
-from atlas_consortia_commons.string import equals
-from atlas_consortia_commons.object import enum_val
-from atlas_consortia_commons.ubkg import initialize_ubkg
-from yaml import safe_load
 import requests
-
+from atlas_consortia_commons.object import enum_val
+from atlas_consortia_commons.string import equals
+from atlas_consortia_commons.ubkg import initialize_ubkg
 from flask import Flask, Response
+from hubmap_commons.hm_auth import AuthHelper  # HuBMAP commons
+from yaml import safe_load
 
-# HuBMAP commons
-from hubmap_commons.hm_auth import AuthHelper
 from libs.ontology import Ontology
 
 sys.path.append("search-adaptor/src")
+
 from indexer import Indexer
 from opensearch_helper_functions import *
 from translator.tranlation_helper_functions import *
 from translator.translator_interface import TranslatorInterface
-import datetime
 
-logging.basicConfig(format='[%(asctime)s] %(levelname)s in %(module)s: %(message)s', level=logging.DEBUG,
+logging.basicConfig(format='[%(asctime)s] %(levelname)s in %(module)s: %(message)s',
+                    level=logging.DEBUG,
                     datefmt='%Y-%m-%d %H:%M:%S')
 logger = logging.getLogger(__name__)
 
