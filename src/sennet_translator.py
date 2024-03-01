@@ -5,6 +5,7 @@ import logging
 import os
 import sys
 import time
+import urllib.parse
 
 from atlas_consortia_commons.string import equals
 from atlas_consortia_commons.object import enum_val
@@ -56,6 +57,7 @@ class Translator(TranslatorInterface):
 
     indexer = None
     entity_api_cache = {}
+    ontology_lookup_cache = {}
 
     def __init__(self, indices, app_client_id, app_client_secret, token, ubkg_instance=None):
         try:
@@ -728,6 +730,22 @@ class Translator(TranslatorInterface):
 
         logger.info("Finished executing entity_keys_rename()")
 
+    def _get_ontology_label(self, uberon_url):
+        if uberon_url in self.ontology_lookup_cache:
+            return self.ontology_lookup_cache[uberon_url]
+
+        # service requires double encoded url???
+        encoded_uberon_url = urllib.parse.quote(uberon_url, safe='')
+        encoded_uberon_url = urllib.parse.quote(encoded_uberon_url, safe='')
+
+        url = f"https://www.ebi.ac.uk/ols4/api/ontologies/uberon/terms/{encoded_uberon_url}"
+        res = requests.get(url)
+        if res.status_code != 200:
+            return ''
+
+        label = res.json().get('label', '')
+        self.ontology_lookup_cache[uberon_url] = label  # cache the result
+        return label
 
     # These calculated fields are not stored in neo4j but will be generated
     # and added to the ES
@@ -753,6 +771,16 @@ class Translator(TranslatorInterface):
                            len([a for a in ancestors if 'rui_location' in a]) > 0)
                 entity['has_rui_information'] = str(has_rui)
 
+        # Add rui information anatomical location
+        if 'rui_location' in entity:
+            rui_location = json.loads(entity['rui_location'])
+            labels = [
+                self._get_ontology_label(url)
+                for url in rui_location.get("ccf_annotations", [])
+            ]
+            entity['rui_location_anatomical_locations'] = labels
+
+        # Add last touch
         last_touch = entity['published_timestamp'] if 'published_timestamp' in entity else entity['last_modified_timestamp']
         entity['last_touch'] = str(datetime.datetime.utcfromtimestamp(last_touch/1000))
 
