@@ -738,10 +738,10 @@ class Translator(TranslatorInterface):
             ann_url (str): The annotation url.
 
         Returns:
-            Optional[str]: The label if found, otherwise None.
+            Optional[dict]: The label and purl if found, otherwise None.
         """
         if ann_url in self.ontology_lookup_cache:
-            return self.ontology_lookup_cache[ann_url]
+            return {"label": self.ontology_lookup_cache[ann_url], "purl": ann_url}
 
         host = urllib.parse.urlparse(ann_url).hostname
         if host != 'purl.obolibrary.org':
@@ -758,7 +758,7 @@ class Translator(TranslatorInterface):
 
         label = res.json().get('label')
         self.ontology_lookup_cache[ann_url] = label  # cache the result
-        return label
+        return {"label": label, "purl": ann_url}
 
     # These calculated fields are not stored in neo4j but will be generated
     # and added to the ES
@@ -794,7 +794,8 @@ class Translator(TranslatorInterface):
                     for url in annotation_urls
                     if (label := self._get_ontology_label(url))
                 ]
-                entity['rui_location_anatomical_locations'] = labels
+                if len(labels) > 0:
+                    entity['rui_location_anatomical_locations'] = labels
 
         # Add last touch
         last_touch = entity['published_timestamp'] if 'published_timestamp' in entity else entity['last_modified_timestamp']
