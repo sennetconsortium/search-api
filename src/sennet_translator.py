@@ -59,6 +59,10 @@ class Translator(TranslatorInterface):
     indexer = None
     entity_api_cache = {}
     ontology_lookup_cache = {}
+    sparql_vocabs = {
+        'purl.obolibrary.org': 'uberon',
+        'purl.org': 'fma',
+    }
 
     def __init__(self, indices, app_client_id, app_client_secret, token, ubkg_instance=None):
         try:
@@ -741,22 +745,36 @@ class Translator(TranslatorInterface):
             Optional[dict]: The label and purl if found, otherwise None.
         """
         if ann_url in self.ontology_lookup_cache:
-            return {"label": self.ontology_lookup_cache[ann_url], "purl": ann_url}
+            return {'label': self.ontology_lookup_cache[ann_url], 'purl': ann_url}
 
         host = urllib.parse.urlparse(ann_url).hostname
-        if host != 'purl.obolibrary.org':
+        vocab = self.sparql_vocabs.get(host)
+        if not vocab:
             return None
 
-        # service requires double encoded url???
-        enc_ann_url = urllib.parse.quote(ann_url, safe='')
-        enc_ann_url = urllib.parse.quote(enc_ann_url, safe='')
-
-        url = f"https://www.ebi.ac.uk/ols4/api/ontologies/uberon/terms/{enc_ann_url}"
-        res = requests.get(url)
+        schema = 'http://www.w3.org/2000/01/rdf-schema#label'
+        table = f'https://purl.humanatlas.io/vocab/{vocab}'
+        query = (
+            f'SELECT ?label FROM <{table}> WHERE {{ <{ann_url}> <{schema}> ?label }}'
+        )
+        headers = {
+            'Accept': 'application/sparql-results+json',
+            'Content-Type': 'application/x-www-form-urlencoded',
+        }
+        res = requests.post(
+            'https://lod.humanatlas.io/sparql', data={'query': query}, headers=headers
+        )
         if res.status_code != 200:
             return None
 
-        label = res.json().get('label')
+        bindings = res.json().get('results', {}).get('bindings', [])
+        if len(bindings) != 1:
+            return None
+
+        label = bindings[0].get('label', {}).get('value')
+        if not label:
+            return None
+
         self.ontology_lookup_cache[ann_url] = label  # cache the result
         return {"label": label, "purl": ann_url}
 
