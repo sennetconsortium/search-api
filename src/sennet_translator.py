@@ -1,31 +1,33 @@
 import concurrent.futures
 import copy
+import datetime
 import json
 import logging
 import os
 import sys
 import time
+import urllib.parse
+from typing import Optional
 
-from atlas_consortia_commons.string import equals
-from atlas_consortia_commons.object import enum_val
-from atlas_consortia_commons.ubkg import initialize_ubkg
-from yaml import safe_load
 import requests
-
+from atlas_consortia_commons.object import enum_val
+from atlas_consortia_commons.string import equals
+from atlas_consortia_commons.ubkg import initialize_ubkg
 from flask import Flask, Response
+from hubmap_commons.hm_auth import AuthHelper  # HuBMAP commons
+from yaml import safe_load
 
-# HuBMAP commons
-from hubmap_commons.hm_auth import AuthHelper
 from libs.ontology import Ontology
 
 sys.path.append("search-adaptor/src")
+
 from indexer import Indexer
 from opensearch_helper_functions import *
 from translator.tranlation_helper_functions import *
 from translator.translator_interface import TranslatorInterface
-import datetime
 
-logging.basicConfig(format='[%(asctime)s] %(levelname)s in %(module)s: %(message)s', level=logging.DEBUG,
+logging.basicConfig(format='[%(asctime)s] %(levelname)s in %(module)s: %(message)s',
+                    level=logging.DEBUG,
                     datefmt='%Y-%m-%d %H:%M:%S')
 logger = logging.getLogger(__name__)
 
@@ -56,6 +58,11 @@ class Translator(TranslatorInterface):
 
     indexer = None
     entity_api_cache = {}
+    ontology_lookup_cache = {}
+    sparql_vocabs = {
+        'purl.obolibrary.org': 'uberon',
+        'purl.org': 'fma',
+    }
 
     def __init__(self, indices, app_client_id, app_client_secret, token, ubkg_instance=None):
         try:
@@ -728,6 +735,48 @@ class Translator(TranslatorInterface):
 
         logger.info("Finished executing entity_keys_rename()")
 
+    def _get_ontology_label(self, ann_url: str) -> Optional[str]:
+        """Get the label from the appropriate ontology lookup service.
+
+        Args:
+            ann_url (str): The annotation url.
+
+        Returns:
+            Optional[dict]: The label and purl if found, otherwise None.
+        """
+        if ann_url in self.ontology_lookup_cache:
+            return {'label': self.ontology_lookup_cache[ann_url], 'purl': ann_url}
+
+        host = urllib.parse.urlparse(ann_url).hostname
+        vocab = self.sparql_vocabs.get(host)
+        if not vocab:
+            return None
+
+        schema = 'http://www.w3.org/2000/01/rdf-schema#label'
+        table = f'https://purl.humanatlas.io/vocab/{vocab}'
+        query = (
+            f'SELECT ?label FROM <{table}> WHERE {{ <{ann_url}> <{schema}> ?label }}'
+        )
+        headers = {
+            'Accept': 'application/sparql-results+json',
+            'Content-Type': 'application/x-www-form-urlencoded',
+        }
+        res = requests.post(
+            'https://lod.humanatlas.io/sparql', data={'query': query}, headers=headers
+        )
+        if res.status_code != 200:
+            return None
+
+        bindings = res.json().get('results', {}).get('bindings', [])
+        if len(bindings) != 1:
+            return None
+
+        label = bindings[0].get('label', {}).get('value')
+        if not label:
+            return None
+
+        self.ontology_lookup_cache[ann_url] = label  # cache the result
+        return {"label": label, "purl": ann_url}
 
     # These calculated fields are not stored in neo4j but will be generated
     # and added to the ES
@@ -753,6 +802,20 @@ class Translator(TranslatorInterface):
                            len([a for a in ancestors if 'rui_location' in a]) > 0)
                 entity['has_rui_information'] = str(has_rui)
 
+        # Add rui information anatomical location
+        if 'rui_location' in entity:
+            rui_location = json.loads(entity['rui_location'])
+            if 'ccf_annotations' in rui_location:
+                annotation_urls = rui_location['ccf_annotations']
+                labels = [
+                    label
+                    for url in annotation_urls
+                    if (label := self._get_ontology_label(url))
+                ]
+                if len(labels) > 0:
+                    entity['rui_location_anatomical_locations'] = labels
+
+        # Add last touch
         last_touch = entity['published_timestamp'] if 'published_timestamp' in entity else entity['last_modified_timestamp']
         entity['last_touch'] = str(datetime.datetime.utcfromtimestamp(last_touch/1000))
 
