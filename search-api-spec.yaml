@@ -295,7 +295,7 @@ paths:
     put:
       tags:
         - reindex
-      summary: Reindex for a given UUID of dataset
+      summary: Reindex for a given UUID of an entity
       operationId: reindex
       parameters:
         - name: identifier
@@ -304,6 +304,28 @@ paths:
           required: true
           schema:
             type: string
+      responses:
+        "202":
+          description: The request has been accepted and reindex is in process
+
+  /reindex-bulk:
+    put:
+      tags:
+        - reindex_bulk
+      summary: Reindex for a given list of entity UUIDs
+      operationId: reindex_bulk
+      requestBody:
+        description: A JSON list of UUIDs to be reindexed
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/requestJsonBody'
+            example: >
+              '[
+                  "SNT.123.ABC",
+                  "SNT.456.DEF"
+              ]'
       responses:
         "202":
           description: The request has been accepted and reindex is in process
