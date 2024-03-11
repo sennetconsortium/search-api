@@ -2,38 +2,40 @@ settings:
   index:
     mapping.total_fields.limit: 4000
     query.default_field: 2048
-    
+
 mappings:
   date_detection: False
   dynamic_templates:
-    -
-      living_donor_data:
+    - living_donor_data:
         path_match: "*.living_donor_data.data_value"
         mapping:
-          type: text
-          fields:
-            keyword:
-              type: keyword
-    -
-      organ_donor_data:
+          type: keyword
+    - organ_donor_data:
         path_match: "*.organ_donor_data.data_value"
         mapping:
-          type: text
-          fields:
-            keyword:
-              type: keyword
-    -
-      metadata_value_fields:
+          type: keyword
+    - metadata_value_fields:
         match_pattern: "regex"
         match: "^(.*_value)$"
         mapping:
           type: float
-    -
-      metadata_number_fields:
+    - metadata_number_fields:
         match_pattern: "regex"
         match: "^(.*_number)$"
         mapping:
           type: float
+
+    # Must handle the above offending fields before this "catch all" mapping
+    # This emulates the default ES behavior, giving us a "keyword" subfield, with a "keyword" type
+    # Also copy the value of each mapped field to "all_text", which can then be queried as a single field
+    - map_every_string:
+        match_mapping_type: string
+        mapping:
+          type: text
+          copy_to: all_text
+          fields:
+            keyword:
+              type: keyword
     - # Handle all numeric types as float to avoid cast errors
       map_every_numeric:
         match_mapping_type: long
