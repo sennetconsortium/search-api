@@ -6,6 +6,37 @@ settings:
 mappings:
   date_detection: False
   dynamic_templates:
+    # Handle problematic metadata created during the reorganization of multi-assay datasets
+    - library_adapter_sequence:
+        path_match: "*.library_adapter_sequence"
+        mapping:
+          type: keyword
+
+    - umi_offset:
+        path_match: "*.umi_offset"
+        mapping:
+          type: keyword
+
+    - umi_size:
+        path_match: "*.umi_size"
+        mapping:
+          type: keyword
+
+    - slide_id:
+        path_match: "*.slide_id"
+        mapping:
+          type: keyword
+
+    - sequencing_read_format:
+        path_match: "*.sequencing_read_format"
+        mapping:
+          type: keyword
+
+    - sample_indexing_set:
+        path_match: "*.sample_indexing_set"
+        mapping:
+          type: keyword
+
     - living_donor_data:
         path_match: "*.living_donor_data.data_value"
         mapping:
