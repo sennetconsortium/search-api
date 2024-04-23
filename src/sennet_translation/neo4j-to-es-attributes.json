@@ -84,6 +84,9 @@
         "image_file_metadata": {
             "es_name": "image_file_metadata"
         },
+        "image_files": {
+            "es_name": "image_files"
+        },
         "ingest_id": {
             "es_name": "ingest_id"
         },
