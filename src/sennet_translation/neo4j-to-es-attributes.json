@@ -192,9 +192,6 @@
         "run_id": {
             "es_name": "run_id"
         },
-        "sample_mapped_metadata": {
-            "es_name": "sample_mapped_metadata"
-        },
         "sample_category": {
             "es_name": "sample_category"
         },
