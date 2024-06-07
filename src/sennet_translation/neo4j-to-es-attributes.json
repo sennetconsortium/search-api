@@ -6,6 +6,9 @@
         "assigned_to_group_name": {
             "es_name": "assigned_to_group_name"
         },
+        "cedar_mapped_metadata": {
+            "es_name": "cedar_mapped_metadata"
+        },
         "contacts": {
             "es_name": "contacts"
         },
