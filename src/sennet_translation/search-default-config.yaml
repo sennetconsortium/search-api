@@ -55,6 +55,11 @@ mappings:
         match: "^(.*_number)$"
         mapping:
           type: float
+    - metadata_count_fields:
+        match_pattern: "regex"
+        match: "^(.*_count)$"
+        mapping:
+          type: float
 
     # Must handle the above offending fields before this "catch all" mapping
     # This emulates the default ES behavior, giving us a "keyword" subfield, with a "keyword" type
