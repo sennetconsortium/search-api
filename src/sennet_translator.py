@@ -669,6 +669,7 @@ class Translator(TranslatorInterface):
                 entity_doc.pop('immediate_ancestors')
                 entity_doc.pop('metadata')
                 entity_doc.pop('source')
+                entity_doc.pop('upload')
                 # entity_doc.pop('origin_sample')
                 if 'source_sample' in entity_doc:
                     entity_doc.pop('source_sample')
