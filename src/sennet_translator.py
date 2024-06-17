@@ -662,10 +662,12 @@ class Translator(TranslatorInterface):
                 entity_doc = self.generate_doc(_entity, 'dict')
                 entity_doc.pop('ancestors')
                 entity_doc.pop('ancestor_ids')
+                entity_doc.pop('cedar_mapped_metadata')
                 entity_doc.pop('descendants')
                 entity_doc.pop('descendant_ids')
                 entity_doc.pop('immediate_descendants')
                 entity_doc.pop('immediate_ancestors')
+                entity_doc.pop('metadata')
                 entity_doc.pop('source')
                 # entity_doc.pop('origin_sample')
                 if 'source_sample' in entity_doc:
