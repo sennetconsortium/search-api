@@ -973,6 +973,13 @@ class Translator(TranslatorInterface):
                         except IndexError:
                             entity['source_sample'] = {}
 
+                    # Reduce pipeline_message when it exceeds 32766 bytes
+                    if 'pipeline_message' in entity:
+                        max_bytes = 32766
+                        if len(entity['pipeline_message'].encode('utf-8')) > max_bytes:
+                            max_bytes_msg = entity['pipeline_message'].encode('utf-8')[:max_bytes]
+                            entity['pipeline_message'] = max_bytes_msg.decode('utf-8', 'ignore')
+
                     # Move files to the root level if exist
                     if 'ingest_metadata' in entity and equals(entity['entity_type'], self.entities.DATASET):
                         # Because we remove files from metadata later (to reduce size) we need to shallow copy of metadata
