@@ -894,7 +894,7 @@ class Translator(TranslatorInterface):
                 for ancestor_uuid in ancestor_ids:
                     # Retrieve the entity details
                     ancestor_dict = self.call_entity_api(ancestor_uuid, 'entities')
-
+                    ancestor_dict.pop('pipeline_message', None)
                     # Add to the list
                     ancestors.append(ancestor_dict)
 
@@ -910,7 +910,7 @@ class Translator(TranslatorInterface):
                 for descendant_uuid in descendant_ids:
                     # Retrieve the entity details
                     descendant_dict = self.call_entity_api(descendant_uuid, 'entities')
-
+                    descendant_dict.pop('pipeline_message', None)
                     # Add to the list
                     descendants.append(descendant_dict)
 
@@ -924,6 +924,14 @@ class Translator(TranslatorInterface):
 
                 entity['ancestor_ids'] = ancestor_ids
                 entity['descendant_ids'] = descendant_ids
+
+                # TODO: remove all instances of this pipeline_message deletion when new feature to skip properties
+                # within GET entity of entity-api becomes available
+                for immediate_ancestor in immediate_ancestors:
+                    immediate_ancestor.pop('pipeline_message', None)
+
+                for immediate_descendant in immediate_descendants:
+                    immediate_descendant.pop('pipeline_message', None)
 
                 entity['immediate_ancestors'] = immediate_ancestors
                 entity['immediate_descendants'] = immediate_descendants
