@@ -976,9 +976,10 @@ class Translator(TranslatorInterface):
                     # Reduce pipeline_message when it exceeds 32766 bytes
                     if 'pipeline_message' in entity:
                         max_bytes = 32766
-                        if len(entity['pipeline_message'].encode('utf-8')) > max_bytes:
-                            max_bytes_msg = entity['pipeline_message'].encode('utf-8')[:max_bytes]
-                            entity['pipeline_message'] = max_bytes_msg.decode('utf-8', 'ignore')
+                        msg_byte_array = bytearray(entity['pipeline_message'], 'utf-8')
+                        if len(msg_byte_array) > max_bytes:
+                            max_bytes_msg = msg_byte_array[:(max_bytes-1)]
+                            entity['pipeline_message'] = max_bytes_msg.decode('utf-8')
 
                     # Move files to the root level if exist
                     if 'ingest_metadata' in entity and equals(entity['entity_type'], self.entities.DATASET):
