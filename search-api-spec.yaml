@@ -340,3 +340,5 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AssayTypeReturnDict'
+        "404":
+          description: The requested index could not be found
