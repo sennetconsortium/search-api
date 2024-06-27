@@ -993,9 +993,9 @@ class Translator(TranslatorInterface):
                     if 'ingest_metadata' in entity and equals(entity['entity_type'], self.entities.DATASET):
                         # Because we remove files from metadata later (to reduce size) we need to shallow copy of metadata
                         metadata = copy.copy(entity['ingest_metadata'])
-                        if 'files' in metadata:
+                        if metadata is not None and 'files' in metadata:
                             entity['files'] = metadata['files']
-                            entity['ingest_metadata'].pop('files')
+                            entity['ingest_metadata'].pop('files', None)
 
                     # Add multi-revisions
                     if 'next_revision_uuid' in entity or 'previous_revision_uuid' in entity:
