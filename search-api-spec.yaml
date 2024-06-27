@@ -307,3 +307,36 @@ paths:
       responses:
         "202":
           description: The request has been accepted and reindex is in process
+
+  /mapping:
+    get:
+      tags:
+        - mapping
+      summary: Exposes Elasticsearch's `/_mapping` endpoint to return the mapping definitions for the default index
+      responses:
+        "200":
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssayTypeReturnDict'
+
+  /mapping/{index_name}:
+    get:
+      tags:
+        - mapping
+      summary: Exposes Elasticsearch's `/_mapping` endpoint to return the mapping definitions for the provided index
+      parameters:
+        - name: index_name
+          in: path
+          description: The name of an existing Elasticsearch index (see the /indices web service call)
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssayTypeReturnDict'
