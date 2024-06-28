@@ -321,7 +321,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/AssayTypeReturnDict'
 
-  /mapping/{index_name}:
+  /{index_name}/mapping:
     get:
       tags:
         - mapping
