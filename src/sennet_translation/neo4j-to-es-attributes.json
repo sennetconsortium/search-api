@@ -201,6 +201,9 @@
         "sennet_id": {
             "es_name": "sennet_id"
         },
+        "sources": {
+            "es_name": "sources"
+        },
         "source_mapped_metadata": {
             "es_name": "source_mapped_metadata"
         },
