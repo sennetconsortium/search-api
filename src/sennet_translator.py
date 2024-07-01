@@ -894,7 +894,7 @@ class Translator(TranslatorInterface):
                 for ancestor_uuid in ancestor_ids:
                     # Retrieve the entity details
                     ancestor_dict = self.call_entity_api(ancestor_uuid, 'entities')
-
+                    ancestor_dict.pop('pipeline_message', None)
                     # Add to the list
                     ancestors.append(ancestor_dict)
 
@@ -910,7 +910,7 @@ class Translator(TranslatorInterface):
                 for descendant_uuid in descendant_ids:
                     # Retrieve the entity details
                     descendant_dict = self.call_entity_api(descendant_uuid, 'entities')
-
+                    descendant_dict.pop('pipeline_message', None)
                     # Add to the list
                     descendants.append(descendant_dict)
 
@@ -924,6 +924,14 @@ class Translator(TranslatorInterface):
 
                 entity['ancestor_ids'] = ancestor_ids
                 entity['descendant_ids'] = descendant_ids
+
+                # TODO: remove all instances of this pipeline_message deletion when new feature to skip properties
+                # within GET entity of entity-api becomes available
+                for immediate_ancestor in immediate_ancestors:
+                    immediate_ancestor.pop('pipeline_message', None)
+
+                for immediate_descendant in immediate_descendants:
+                    immediate_descendant.pop('pipeline_message', None)
 
                 entity['immediate_ancestors'] = immediate_ancestors
                 entity['immediate_descendants'] = immediate_descendants
@@ -973,13 +981,21 @@ class Translator(TranslatorInterface):
                         except IndexError:
                             entity['source_sample'] = {}
 
+                    # Reduce pipeline_message when it exceeds 32766 bytes
+                    if 'pipeline_message' in entity:
+                        max_bytes = 32766
+                        msg_byte_array = bytearray(entity['pipeline_message'], 'utf-8')
+                        if len(msg_byte_array) > max_bytes:
+                            max_bytes_msg = msg_byte_array[:(max_bytes-1)]
+                            entity['pipeline_message'] = max_bytes_msg.decode('utf-8')
+
                     # Move files to the root level if exist
                     if 'ingest_metadata' in entity and equals(entity['entity_type'], self.entities.DATASET):
                         # Because we remove files from metadata later (to reduce size) we need to shallow copy of metadata
                         metadata = copy.copy(entity['ingest_metadata'])
-                        if 'files' in metadata:
+                        if metadata is not None and 'files' in metadata:
                             entity['files'] = metadata['files']
-                            entity['ingest_metadata'].pop('files')
+                            entity['ingest_metadata'].pop('files', None)
 
                     # Add multi-revisions
                     if 'next_revision_uuid' in entity or 'previous_revision_uuid' in entity:
