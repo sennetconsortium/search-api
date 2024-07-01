@@ -660,16 +660,17 @@ class Translator(TranslatorInterface):
                 _entity = self.call_entity_api(_entity['uuid'], 'entities')
 
                 entity_doc = self.generate_doc(_entity, 'dict')
-                entity_doc.pop('ancestors')
-                entity_doc.pop('ancestor_ids')
-                entity_doc.pop('cedar_mapped_metadata')
-                entity_doc.pop('descendants')
-                entity_doc.pop('descendant_ids')
-                entity_doc.pop('immediate_descendants')
-                entity_doc.pop('immediate_ancestors')
-                entity_doc.pop('metadata')
-                entity_doc.pop('source')
-                entity_doc.pop('upload')
+                entity_doc.pop('ancestors', None)
+                entity_doc.pop('ancestor_ids', None)
+                entity_doc.pop('cedar_mapped_metadata', None)
+                entity_doc.pop('descendants', None)
+                entity_doc.pop('descendant_ids', None)
+                entity_doc.pop('immediate_descendants', None)
+                entity_doc.pop('immediate_ancestors', None)
+                entity_doc.pop('metadata', None)
+                entity_doc.pop('source', None)
+                entity_doc.pop('sources', None)
+                entity_doc.pop('upload', None)
                 # entity_doc.pop('origin_sample')
                 if 'source_sample' in entity_doc:
                     entity_doc.pop('source_sample')
@@ -898,13 +899,6 @@ class Translator(TranslatorInterface):
                     # Add to the list
                     ancestors.append(ancestor_dict)
 
-                # Find the Source
-                source = None
-                for a in ancestors:
-                    if equals(a['entity_type'], self.entities.SOURCE):
-                        source = copy.copy(a)
-                        break
-
                 descendant_ids = self.call_entity_api(entity_id, 'descendants', 'uuid')
 
                 for descendant_uuid in descendant_ids:
@@ -938,9 +932,19 @@ class Translator(TranslatorInterface):
 
             # The origin_sample is the sample that `sample_category` is "organ" and the `organ` code is set at the same time
             if entity['entity_type'] in ['Sample', 'Dataset', 'Publication']:
-                # Add new properties
-                entity['source'] = source
-                self.entity_keys_rename(entity.get('source'), True)
+
+                # Dataset gets the property `sources` from Entity API, we will generate `source` for other entity types
+                if entity['entity_type'] in ['Sample', 'Publication']:
+                    # Find the Source
+                    source = None
+                    for a in ancestors:
+                        if equals(a['entity_type'], self.entities.SOURCE):
+                            source = copy.copy(a)
+                            break
+
+                    # Add new properties
+                    entity['source'] = source
+                    self.entity_keys_rename(entity.get('source'), True)
 
                 sample_categories = Ontology.ops().specimen_categories()
 
