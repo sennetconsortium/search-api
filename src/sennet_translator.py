@@ -932,20 +932,6 @@ class Translator(TranslatorInterface):
 
             # The origin_sample is the sample that `sample_category` is "organ" and the `organ` code is set at the same time
             if entity['entity_type'] in ['Sample', 'Dataset', 'Publication']:
-
-                # Dataset gets the property `sources` from Entity API, we will generate `source` for other entity types
-                if entity['entity_type'] in ['Sample', 'Publication']:
-                    # Find the Source
-                    source = None
-                    for a in ancestors:
-                        if equals(a['entity_type'], self.entities.SOURCE):
-                            source = copy.copy(a)
-                            break
-
-                    # Add new properties
-                    entity['source'] = source
-                    self.entity_keys_rename(entity.get('source'), True)
-
                 sample_categories = Ontology.ops().specimen_categories()
 
                 entity['origin_sample'] = None 
