@@ -225,7 +225,7 @@ class Translator(TranslatorInterface):
         try:
             # Retrieve the entity details
             try:
-                entity = self.call_entity_api(entity_id, 'entities')
+                entity = self.call_entity_api(entity_id, 'documents')
             except requests.HTTPError:
                 entity = self.call_entity_api(entity_id, 'collections')
 
@@ -238,8 +238,7 @@ class Translator(TranslatorInterface):
                     # have a DOI.  But entity-api may still request such Collections be indexed, particularly right
                     # after the Collection becomes visible to the public.
                     try:
-                        self.translate_collection(entity_id
-                                                  ,reindex=True)
+                        self.translate_collection(entity_id, reindex=True)
                     except Exception as e:
                         logger.error(f"Unable to index Collection due to e={str(e)}")
                 elif equals(entity['entity_type'], self.entities.UPLOAD):
@@ -253,8 +252,7 @@ class Translator(TranslatorInterface):
 
                     # Only Dataset entities may have previous/next revisions
                     if entity['entity_type'] in ['Dataset', 'Publication']:
-                        previous_revision_entity_ids = self.call_entity_api(entity_id, 'previous_revisions',
-                                                                            'uuid')
+                        previous_revision_entity_ids = self.call_entity_api(entity_id, 'previous_revisions', 'uuid')
                         next_revision_entity_ids = self.call_entity_api(entity_id, 'next_revisions', 'uuid')
 
                     # Need to flatten previous and next revision lists
@@ -272,7 +270,7 @@ class Translator(TranslatorInterface):
                     # Reindex the rest of the entities in the list
                     for entity_entity_id in set(entity_ids):
                         # Retrieve the entity details
-                        node = self.call_entity_api(entity_entity_id, 'entities')
+                        node = self.call_entity_api(entity_entity_id, 'documents')
 
                         self.call_indexer(node, True)
 
@@ -359,7 +357,7 @@ class Translator(TranslatorInterface):
 
         if 'file_uuid' in document:
             # Confirm the Dataset to which the File entity belongs is published
-            dataset = self.call_entity_api(document['dataset_uuid'], 'entities')
+            dataset = self.call_entity_api(document['dataset_uuid'], 'documents')
             return self.is_public(dataset)
 
         if document['entity_type'] in ['Dataset', 'Publication']:
@@ -407,7 +405,7 @@ class Translator(TranslatorInterface):
             if entity_id:
                 try:
                     # Get the Dataset entity with the specified entity_id
-                    theEntity = self.call_entity_api(entity_id, 'entities')
+                    theEntity = self.call_entity_api(entity_id, 'documents')
                 except Exception as e:
                     # entity-api may throw an Exception if entity_id is actually the
                     # uuid of a File, so swallow the error here and process as
@@ -477,7 +475,7 @@ class Translator(TranslatorInterface):
             default_private_index = self.INDICES['indices'][self.DEFAULT_INDEX_WITHOUT_PREFIX]['private']
 
             # Retrieve the upload entity details
-            upload = self.call_entity_api(entity_id, 'entities')
+            upload = self.call_entity_api(entity_id, 'documents')
 
             self.add_entities_to_entity(upload)
             self.entity_keys_rename(upload)
@@ -545,14 +543,14 @@ class Translator(TranslatorInterface):
             descendant_uuids = self.call_entity_api(entity_id, 'descendants', 'uuid')
 
             # Index the source entity itself separately
-            source = self.call_entity_api(entity_id, 'entities')
+            source = self.call_entity_api(entity_id, 'documents')
 
             self.call_indexer(source)
 
             # Index all the descendants of this source
             for descendant_uuid in descendant_uuids:
                 # Retrieve the entity details
-                descendant = self.call_entity_api(descendant_uuid, 'entities')
+                descendant = self.call_entity_api(descendant_uuid, 'documents')
 
                 self.call_indexer(descendant)
 
@@ -657,7 +655,7 @@ class Translator(TranslatorInterface):
         def handle_doc(key):
             for _entity in entity[key]:
                 # Retrieve the entity details
-                _entity = self.call_entity_api(_entity['uuid'], 'entities')
+                _entity = self.call_entity_api(_entity['uuid'], 'documents')
 
                 entity_doc = self.generate_doc(_entity, 'dict')
                 entity_doc.pop('ancestors', None)
@@ -894,7 +892,7 @@ class Translator(TranslatorInterface):
 
                 for ancestor_uuid in ancestor_ids:
                     # Retrieve the entity details
-                    ancestor_dict = self.call_entity_api(ancestor_uuid, 'entities')
+                    ancestor_dict = self.call_entity_api(ancestor_uuid, 'documents')
                     ancestor_dict.pop('pipeline_message', None)
                     # Add to the list
                     ancestors.append(ancestor_dict)
@@ -903,7 +901,7 @@ class Translator(TranslatorInterface):
 
                 for descendant_uuid in descendant_ids:
                     # Retrieve the entity details
-                    descendant_dict = self.call_entity_api(descendant_uuid, 'entities')
+                    descendant_dict = self.call_entity_api(descendant_uuid, 'documents')
                     descendant_dict.pop('pipeline_message', None)
                     # Add to the list
                     descendants.append(descendant_dict)
