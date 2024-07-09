@@ -7,6 +7,7 @@ import os
 import sys
 import time
 import urllib.parse
+from pathlib import Path
 from typing import Optional
 
 import requests
@@ -46,6 +47,7 @@ entity_properties_list = [
     'datasets',
     'entities'
 ]
+
 
 class Translator(TranslatorInterface):
     ACCESS_LEVEL_PUBLIC = 'public'
@@ -155,7 +157,6 @@ class Translator(TranslatorInterface):
                                                               self.DEFAULT_ENTITY_API_URL)
                 upload_uuids_list = get_uuids_by_entity_type("upload", self.request_headers,
                                                              self.DEFAULT_ENTITY_API_URL)
-
                 collection_uuids_list = get_uuids_by_entity_type("collection", self.request_headers,
                                                                  self.DEFAULT_ENTITY_API_URL)
 
@@ -200,7 +201,6 @@ class Translator(TranslatorInterface):
                 # - each upload, only add to the hm_consortium_entities index (private index of the default)
                 # - each source and its descendants in the tree
                 futures_list = []
-                results = []
                 with concurrent.futures.ThreadPoolExecutor() as executor:
                     collection_futures_list = [
                         executor.submit(self.translate_collection, uuid, reindex=True)
@@ -268,9 +268,9 @@ class Translator(TranslatorInterface):
                     self.call_indexer(entity)
 
                     # Reindex the rest of the entities in the list
-                    for entity_entity_id in set(entity_ids):
+                    for entity_id in set(entity_ids):
                         # Retrieve the entity details
-                        node = self.call_entity_api(entity_entity_id, 'documents')
+                        node = self.call_entity_api(entity_id, 'documents')
 
                         self.call_indexer(node, True)
 
@@ -341,7 +341,7 @@ class Translator(TranslatorInterface):
             private_index = self.INDICES['indices'][index]['private']
 
             if self.is_public(document):
-                response =self.indexer.index(entity_id, json.dumps(document), public_index, False)
+                response = self.indexer.index(entity_id, json.dumps(document), public_index, False)
             response += self.indexer.index(entity_id, json.dumps(document), private_index, False)
 
         return response
@@ -395,7 +395,7 @@ class Translator(TranslatorInterface):
 
         if not index:
             # Shouldn't happen due to configuration of Flask Blueprint routes
-            raise ValueError(f"index must be specified for delete_docs()")
+            raise ValueError("index must be specified for delete_docs()")
 
         if index == 'files':
             # For deleting documents, try removing them from the specified scope, but do not
@@ -406,14 +406,13 @@ class Translator(TranslatorInterface):
                 try:
                     # Get the Dataset entity with the specified entity_id
                     theEntity = self.call_entity_api(entity_id, 'documents')
-                except Exception as e:
+                except Exception:
                     # entity-api may throw an Exception if entity_id is actually the
                     # uuid of a File, so swallow the error here and process as
                     # removing the file info document for a File below
-                    logger.info(    f"No entity found  with entity_id '{entity_id}' in Neo4j, so process as"
-                                    f" a request to delete a file info document for a File with that UUID.")
-                    theEntity = {   'entity_type': 'File'
-                                    ,'uuid': entity_id}
+                    logger.info(f"No entity found  with entity_id '{entity_id}' in Neo4j, so process as "
+                                "a request to delete a file info document for a File with that UUID.")
+                    theEntity = {'entity_type': 'File', 'uuid': entity_id}
 
             response = ''
             for scope in scope_list:
@@ -423,31 +422,34 @@ class Translator(TranslatorInterface):
                     # work done by the caller, but count on the caller for other business logic, like constraining
                     # to Datasets without PHI.
                     if theEntity and theEntity['entity_type'] not in ['Dataset',  'Publication', 'File']:
-                        raise ValueError(   f"Translator.delete_docs() is not configured to clear documents for"
-                                            f" entities of type '{theEntity['entity_type']} for HuBMAP.")
+                        raise ValueError("Translator.delete_docs() is not configured to clear documents for "
+                                         f"entities of type '{theEntity['entity_type']} for HuBMAP.")
+
                     elif theEntity['entity_type'] in ['Dataset', 'Publication']:
                         try:
-                            resp = self.indexer.delete_fieldmatch_document( target_index
-                                                                            ,'dataset_uuid'
-                                                                            , theEntity['uuid'])
+                            resp = self.indexer.delete_fieldmatch_document(target_index,
+                                                                           'dataset_uuid',
+                                                                           theEntity['uuid'])
                             response += resp[0]
                         except Exception as e:
                             response += (f"While deleting the Dataset '{theEntity['uuid']}' file info documents"
                                          f" from {target_index},"
                                          f" exception raised was {str(e)}.")
+
                     elif theEntity['entity_type'] == 'File':
                         try:
-                            resp = self.indexer.delete_fieldmatch_document( target_index
-                                                                            ,'file_uuid'
-                                                                            ,theEntity['uuid'])
+                            resp = self.indexer.delete_fieldmatch_document(target_index,
+                                                                           'file_uuid',
+                                                                           theEntity['uuid'])
                             response += resp[0]
                         except Exception as e:
-                            response += (   f"While deleting the File '{theEntity['uuid']}' file info document" 
-                                            f" from {target_index},"
-                                            f" exception raised was {str(e)}.")
+                            response += (f"While deleting the File '{theEntity['uuid']}' file info document "
+                                         f"from {target_index}, "
+                                         f"exception raised was {str(e)}.")
+
                     else:
-                        raise ValueError(   f"Unable to find a Dataset or File with identifier {entity_id} whose"
-                                            f" file info documents can be deleted from OpenSearch.")
+                        raise ValueError(f"Unable to find a Dataset or File with identifier {entity_id} whose "
+                                         "file info documents can be deleted from OpenSearch.")
                 else:
                     # Since a File or a Dataset was not specified, delete all documents from
                     # the target index.
@@ -560,7 +562,7 @@ class Translator(TranslatorInterface):
         except Exception as e:
             logger.error(e)
 
-    #TODO: Delete later
+    # TODO: Delete later
 
     # def init_transformers(self):
     #     for index in self.indices.keys():
@@ -583,7 +585,7 @@ class Translator(TranslatorInterface):
     #     logger.debug(self.TRANSFORMERS)
 
     def init_auth_helper(self):
-        if AuthHelper.isInitialized() == False:
+        if AuthHelper.isInitialized() is False:
             auth_helper = AuthHelper.create(self.app_client_id, self.app_client_secret)
         else:
             auth_helper = AuthHelper.instance()
@@ -832,7 +834,6 @@ class Translator(TranslatorInterface):
             if dataset_category := dataset_category_map.get(entity['creation_action']):
                 entity['dataset_category'] = dataset_category
 
-
     # For Upload, Dataset, Source and Sample objects:
     # add a calculated (not stored in Neo4j) field called `display_subtype` to
     # all Elasticsearch documents of the above types with the following rules:
@@ -932,12 +933,14 @@ class Translator(TranslatorInterface):
             if entity['entity_type'] in ['Sample', 'Dataset', 'Publication']:
                 sample_categories = Ontology.ops().specimen_categories()
 
-                entity['origin_sample'] = None 
-                if ('sample_category' in entity and
+                entity['origin_sample'] = None
+                if (
+                    'sample_category' in entity and
                     'organ' in entity and
                     entity['organ'].strip() != '' and
-                    equals(entity['sample_category'], sample_categories.ORGAN)):
-                    entity['origin_sample'] = copy.copy(entity) 
+                    equals(entity['sample_category'], sample_categories.ORGAN)
+                ):
+                    entity['origin_sample'] = copy.copy(entity)
 
                 if entity['origin_sample'] is None:
                     try:
@@ -992,7 +995,6 @@ class Translator(TranslatorInterface):
                             entity['multi_revisions'] = multi_revisions
 
             self.entity_keys_rename(entity)
-
 
             if entity.get('origin_sample', None):
                 self.entity_keys_rename(entity['origin_sample'])
@@ -1165,7 +1167,6 @@ class Translator(TranslatorInterface):
 
                     logger.info("Finished executing delete_and_recreate_indices()")
 
-
             else:
                 for index in self.indices.keys():
                     # each index should have a public/private index
@@ -1185,6 +1186,7 @@ class Translator(TranslatorInterface):
                     self.indexer.create_index(private_index, index_mapping_settings)
 
                     logger.info("Finished executing delete_and_recreate_indices()")
+
         except Exception:
             msg = "Exception encountered during executing delete_and_recreate_indices()"
             # Log the full stack trace, prepend a line with our message
@@ -1193,7 +1195,7 @@ class Translator(TranslatorInterface):
     def delete_index(self, index):
         try:
             self.indexer.delete_index(index)
-        except Exception as e:
+        except Exception:
             pass
 
 
@@ -1211,6 +1213,7 @@ def get_val_by_key(type_code, data, source_data_name):
 
     return result_val
 
+
 # This approach is different from the live reindex via HTTP request
 # It'll delete all the existing indices and recreate then then index everything
 if __name__ == "__main__":
@@ -1224,7 +1227,7 @@ if __name__ == "__main__":
 
     try:
         token = sys.argv[1]
-    except IndexError as e:
+    except IndexError:
         msg = "Missing admin group token argument"
         logger.exception(msg)
         sys.exit(msg)
