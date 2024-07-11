@@ -1,6 +1,5 @@
 import concurrent.futures
 import copy
-import importlib
 import json
 import logging
 import os
@@ -25,9 +24,7 @@ from libs.ontology import Ontology
 sys.path.append("search-adaptor/src")
 
 from indexer import Indexer
-# from opensearch_helper_functions import *
 from opensearch_helper_functions import execute_opensearch_query, get_uuids_from_es
-# from translator.tranlation_helper_functions import *
 from translator.tranlation_helper_functions import (
     get_all_reindex_enabled_indice_names,
     get_uuids_by_entity_type,
@@ -79,13 +76,14 @@ class Translator(TranslatorInterface):
     DATASET_STATUS_PUBLISHED = "published"
     DEFAULT_INDEX_WITHOUT_PREFIX = ""
     INDICES = {}
-    TRANSFORMERS = {}
+    TRANSFORMERS = {}  # Not used in SenNet
     DEFAULT_ENTITY_API_URL = ""
 
     failed_entity_api_calls = []
     failed_entity_ids = []
     indexer = None
     skip_comparison = False
+    transformation_resources = {}  # Not used in SenNet
 
     entity_api_cache = {}
     ontology_lookup_cache = {}
@@ -144,14 +142,6 @@ class Translator(TranslatorInterface):
 
         # Add index_version by parsing the VERSION file
         self.index_version = ((Path(__file__).absolute().parent.parent / 'VERSION').read_text()).strip()
-        self.transformation_resources = {
-            "ingest_api_soft_assay_url": self.ingest_api_soft_assay_url,
-            "descendants_url": f"{self.entity_api_url}/descendants",
-            "token": token,
-        }
-
-        # Preload all the transformers
-        self.init_transformers()
 
     def __get_scope_list(self, entity_id, document, index, scope):
         scope_list = []
@@ -724,28 +714,6 @@ class Translator(TranslatorInterface):
 
         return auth_helper
 
-    def init_transformers(self):
-        logger.info("Start executing init_transformers()")
-
-        for index in self.indices.keys():
-            try:
-                xform_module = self.INDICES["indices"][index]["transform"]["module"]
-                logger.info(f"Transform module to be dynamically imported: {xform_module} at time: {time.time()}")
-                try:
-                    m = importlib.import_module(xform_module)
-                    self.TRANSFORMERS[index] = m
-                except Exception as e:
-                    logger.error(e)
-                    msg = f"Failed to dynamically import transform module index: {index} at time: {time.time()}"
-                    logger.exception(msg)
-            except KeyError:
-                logger.info(f"No transform or transform module specified in the search-config.yaml for index: {index}")
-
-        logger.debug("========Preloaded transformers===========")
-        logger.debug(self.TRANSFORMERS)
-
-        logger.info("Finished executing init_transformers()")
-
     # Create a dict with HTTP Authorization header with Bearer token
     def create_request_headers_for_auth(self, token: str):
         auth_header_name = "Authorization"
@@ -1091,21 +1059,6 @@ class Translator(TranslatorInterface):
 
                 # Trying to understand here!!!
                 if entity["entity_type"] in ["Dataset", "Publication"]:
-                    entity["source_sample"] = None
-
-                    e = entity
-
-                    while entity["source_sample"] is None:
-                        parents = self.call_entity_api(entity_id=e["uuid"], endpoint_base="parents")
-
-                        try:
-                            # Why?
-                            if equals(parents[0]["entity_type"], self.entities.SAMPLE):
-                                entity["source_sample"] = parents
-
-                            e = parents[0]
-                        except IndexError:
-                            entity["source_sample"] = {}
 
                     # Reduce pipeline_message when it exceeds 32766 bytes
                     if "pipeline_message" in entity:
@@ -1400,7 +1353,7 @@ class Translator(TranslatorInterface):
                     self.delete_index(private_index)
 
                     # get the specific mapping file for the designated index
-                    index_mapping_file = self.INDICES["indices"][index]["elasticsearch" ]["mappings"]
+                    index_mapping_file = self.INDICES["indices"][index]["elasticsearch"]["mappings"]
 
                     # read the elasticserach specific mappings
                     index_mapping_settings = safe_load(
@@ -1428,10 +1381,10 @@ class Translator(TranslatorInterface):
         # N.B. This query does not pass through the AWS Gateway, so we will not have to retrieve the
         # result from an AWS S3 Bucket. If it is larger than 10Mb, we will get it directly.
         QDSL_SEARCH_ENDPOINT_MATCH_UUID_PATTERN = (
-            "{ "
+            '{ '
             '"query": {  "bool": { "filter": [ {"terms": {"uuid": ["<TARGET_SEARCH_UUID>"]}} ] } }, '
-            '"fields": ["ancestor_ids", "descendant_ids"] ,"_source": false '
-            "}"
+            '"fields": ["ancestor_ids", "descendant_ids"] ,"_source": false'
+            ' }'
         )
 
         qdsl_search_query_payload_string = (
@@ -1520,24 +1473,23 @@ class Translator(TranslatorInterface):
         revised_entity_doc_dict = self.call_entity_api(entity_id=entity_id, endpoint_base="documents")
 
         painless_query = (
-            "for (prop in <TARGET_DOC_ELEMENT_LIST>)"
-            " {{if (ctx._source.containsKey(prop))"
-            "  {{for (int i = 0; i < ctx._source[prop].length; ++i)"
-            "   {{if (ctx._source[prop][i]['uuid'] == params.modified_entity_uuid)"
-            "    {{ctx._source[prop][i] = params.revised_related_entity}} }} }} }}"
+            f'for (prop in <TARGET_DOC_ELEMENT_LIST>)'
+            f' {{if (ctx._source.containsKey(prop))'
+            f'  {{for (int i = 0; i < ctx._source[prop].length; ++i)'
+            f'   {{if (ctx._source[prop][i][\'uuid\'] == params.modified_entity_uuid)'
+            f'    {{ctx._source[prop][i] = params.revised_related_entity}} }} }} }}'
         )
         QDSL_UPDATE_ENDPOINT_WITH_ID_PARAM = (
-            "{{"
-            '  "script": {{'
-            '    "lang": "painless",'
-            f'   "source": "{painless_query}",'
-            '    "params": {{'
-            '      "modified_entity_uuid": "<TARGET_MODIFIED_ENTITY_UUID>",'
-            '      "revised_related_entity": <THIS_REVISED_ENTITY>'
-            "    }}"
-            "  }}"
-            "}}"
+            f'{{\"script\": {{'
+            f'  \"lang\": \"painless\",'
+            f'  \"source\": \"{painless_query}\",'
+            f'  \"params\": {{'
+            f'   \"modified_entity_uuid\": \"<TARGET_MODIFIED_ENTITY_UUID>\",'
+            f'   \"revised_related_entity\": <THIS_REVISED_ENTITY>'
+            f'  }}'
+            f' }} }}'
         )
+
         # Eliminate taking advantage of our knowledge that an ancestor only needs its descendants lists
         # updated and a descendant only needs its ancestor lists updated.  Instead, focus upon consolidating
         # updates into a single query for the related entity's document to avoid HTTP 409 Conflict
@@ -1629,13 +1581,13 @@ class Translator(TranslatorInterface):
                 public_doc = self.generate_public_doc(entity=entity)
 
         except Exception:
+            # Log the full stack trace, prepend a line with our message. But continue on
+            # rather than raise the Exception.
             msg = (
                 "Exception document generation "
                 f"for uuid: {entity['uuid']}, entity_type: {entity['entity_type']}"
                 f"for direct '{index_group}' reindex."
             )
-            # Log the full stack trace, prepend a line with our message. But continue on
-            # rather than raise the Exception.
             logger.exception(msg)
 
         docs_to_write_dict = {
