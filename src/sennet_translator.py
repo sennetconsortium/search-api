@@ -9,7 +9,7 @@ import time
 import urllib.parse
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 
 import requests
 from atlas_consortia_commons.object import enum_val
@@ -1729,6 +1729,26 @@ class Translator(TranslatorInterface):
             futures_list = [executor.submit(self.reindex_entity, uuid) for uuid in target_ids]
             for f in concurrent.futures.as_completed(futures_list):
                 _ = f.result()
+
+    # The added fields specified in `entity_properties_list` should not be added
+    # to themselves as sub fields
+    # The `except_properties_list` is a subset of entity_properties_list
+    def exclude_added_top_level_properties(self, entity_data: Union[dict, list], except_properties_list: list = []):
+        logger.info("Start executing exclude_added_top_level_properties()")
+
+        if isinstance(entity_data, dict):
+            for prop in entity_properties_list:
+                if (prop in entity_data) and (prop not in except_properties_list):
+                    entity_data.pop(prop)
+        elif isinstance(entity_data, list):
+            for prop in entity_properties_list:
+                for item in entity_data:
+                    if isinstance(item, dict) and (prop in item) and (prop not in except_properties_list):
+                        item.pop(prop)
+        else:
+            logger.debug(f"The input entity_data type: {type(entity_data)}. Only dict and list are supported.")
+
+        logger.info("Finished executing exclude_added_top_level_properties()")
 
 
 def get_val_by_key(type_code, data, source_data_name):
