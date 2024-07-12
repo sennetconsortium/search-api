@@ -1094,13 +1094,13 @@ class Translator(TranslatorInterface):
                     self._entity_keys_rename(a)
             if entity.get("descendants", None):
                 for d in entity.get("descendants", None):
-                    self._entity_keys_rename(d, True)
+                    self._entity_keys_rename(d)
             if entity.get("immediate_descendants", None):
                 for parent in entity.get("immediate_descendants", None):
-                    self._entity_keys_rename(parent, True)
+                    self._entity_keys_rename(parent)
             if entity.get("immediate_ancestors", None):
                 for child in entity.get("immediate_ancestors", None):
-                    self._entity_keys_rename(child, True)
+                    self._entity_keys_rename(child)
 
             remove_specific_key_entry(entity, "other_metadata")
 
