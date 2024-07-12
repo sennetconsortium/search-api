@@ -1692,6 +1692,44 @@ class Translator(TranslatorInterface):
             # Log the full stack trace, prepend a line with our message
             logger.exception(msg)
 
+    def _reindex_related_entities(self, entity_id: str, entity_type: str, neo4j_ancestor_ids: list[str],
+                                  neo4j_descendant_ids: list[str], neo4j_collection_ids: list[str],
+                                  neo4j_upload_ids: list[str]):
+        # If entity is new or Neo4j relationships for entity have changed, do a reindex with each ID
+        # which has entity as an ancestor or descendant.  This is a costlier operation than
+        # directly updating documents for related entities.
+        previous_revision_ids = []
+        next_revision_ids = []
+
+        # Only Dataset/Publication entities may have previous/next revisions
+        if entity_type in ["Dataset", "Publication"]:
+            previous_revision_ids = self.call_entity_api(
+                entity_id=entity_id,
+                endpoint_base="previous_revisions",
+                url_property="uuid"
+            )
+            next_revision_ids = self.call_entity_api(
+                entity_id=entity_id,
+                endpoint_base="next_revisions",
+                url_property="uuid"
+            )
+
+        # All unique entity ids which might refer to the entity of entity_id
+        target_ids = set(
+            neo4j_ancestor_ids
+            + neo4j_descendant_ids
+            + previous_revision_ids
+            + next_revision_ids
+            + neo4j_collection_ids
+            + neo4j_upload_ids
+        )
+
+        # Reindex the rest of the entities in the list
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            futures_list = [executor.submit(self.reindex_entity, uuid) for uuid in target_ids]
+            for f in concurrent.futures.as_completed(futures_list):
+                _ = f.result()
+
 
 def get_val_by_key(type_code, data, source_data_name):
     # Use triple {{{}}}
