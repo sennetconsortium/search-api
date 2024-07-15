@@ -1190,6 +1190,23 @@ class Translator(TranslatorInterface):
         # If result is a list or not a Dataset dict, no change - 7/13/2022 Max & Zhou
         return self.prepare_dataset(response.json())
 
+    def index_entity(self, uuid: str):
+        logger.info(f"Start executing index_entity() on uuid: {uuid}")
+
+        entity_dict = self.call_entity_api(entity_id=uuid, endpoint_base="documents")
+        self._call_indexer(entity=entity_dict)
+
+        logger.info(f"Finished executing index_entity() on uuid: {uuid}")
+
+    # Used by individual PUT /reindex/<id> call
+    def reindex_entity(self, uuid: str):
+        logger.info(f"Start executing reindex_entity() on uuid: {uuid}")
+
+        entity_dict = self.call_entity_api(entity_uuid=uuid, endpoint_base="documents")
+        self._call_indexer(entity=entity_dict, delete_existing_doc_first=True)
+
+        logger.info(f"Finished executing reindex_entity() on uuid: {uuid}")
+
     # The input `dataset_dict` can be a list if the entity-api returns a list, other times it's dict
     # Only applies to Dataset, no change to other entity types:
     # - Add the top-level 'files' field and set to empty list [] as default
