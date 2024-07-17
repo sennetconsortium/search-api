@@ -21,8 +21,8 @@ from libs.ontology import Ontology
 sys.path.append("search-adaptor/src")
 
 from indexer import Indexer
-from opensearch_helper_functions import execute_opensearch_query, get_uuids_from_es
-from translator.tranlation_helper_functions import get_all_reindex_enabled_indice_names, get_uuids_by_entity_type
+from opensearch_helper_functions import get_uuids_from_es
+from translator.tranlation_helper_functions import get_all_reindex_enabled_indice_names
 from translator.translator_interface import TranslatorInterface
 
 logging.basicConfig(
@@ -31,36 +31,6 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 logger = logging.getLogger(__name__)
-
-entity_properties_list = [
-    "metadata",
-    "source",
-    "origin_sample",
-    "source_sample",
-    "ancestor_ids",
-    "descendant_ids",
-    "ancestors",
-    "descendants",
-    "files",
-    "immediate_ancestors",
-    "immediate_descendants",
-    "datasets",
-    "entities",
-]
-
-# A map keyed by entity attribute names stored in Neo4j and retrieved from entity-api, with
-# values for the corresponding document field name in OpenSearch. This Python dict only includes
-# attribute names which must be transformed, unlike the neo4j-to-es-attributes.json is replaces.
-neo4j_to_es_attribute_name_map = {"ingest_metadata": "metadata"}
-
-# Entity types that will have `display_subtype` generated ar index time
-entity_types_with_display_subtype = [
-    "Upload",
-    "Source",
-    "Sample",
-    "Dataset",
-    "Publication",
-]
 
 
 @dataclass(frozen=True)
@@ -85,7 +55,7 @@ class Translator(TranslatorInterface):
     INDICES = {}
     TRANSFORMERS = {}  # Not used in SenNet
     DEFAULT_ENTITY_API_URL = ""
-    BULK_UPDATE_SIZE = 50
+    BULK_UPDATE_SIZE = 100
 
     failed_entity_api_calls = []
     failed_entity_ids = []
@@ -216,147 +186,192 @@ class Translator(TranslatorInterface):
     # TranslatorInterface methods
 
     def translate_all(self):
-        try:
-            logger.info("############# Reindex Live Started #############")
-            start = time.time()
-            delete_failure_results = {}
+        with requests.Session() as session:
+            try:
+                logger.info("############# Reindex Live Started #############")
+                start = time.time()
+                delete_failure_results = {}
 
-            source_uuids_list = self._call_entity_api(endpoint_base="source", endpoint_suffix="entities", url_property="uuid")
-            upload_uuids_list = self._call_entity_api(endpoint_base="upload", endpoint_suffix="entities",  url_property="uuid")
-            collection_uuids_list = self._call_entity_api(endpoint_base="collection", endpoint_suffix="entities", url_property="uuid")
-
-            # Only need this comparison for the live /reindex-all PUT call
-            if not self.skip_comparison:
-                # Make calls to entity-api to get a list of uuids for rest of entity types
-                sample_uuids_list = self._call_entity_api(endpoint_base="sample", endpoint_suffix="entities", url_property="uuid")
-                dataset_uuids_list = self._call_entity_api(endpoint_base="dataset", endpoint_suffix="entities", url_property="uuid")
-
-                # Merge into a big list that with no duplicates
-                all_entities_uuids = set(
-                    source_uuids_list
-                    + sample_uuids_list
-                    + dataset_uuids_list
-                    + upload_uuids_list
-                    + collection_uuids_list
+                source_uuids_list = self._call_entity_api(
+                    session=session,
+                    endpoint_base="source",
+                    endpoint_suffix="entities",
+                    url_property="uuid"
+                )
+                upload_uuids_list = self._call_entity_api(
+                    session=session,
+                    endpoint_base="upload",
+                    endpoint_suffix="entities",
+                    url_property="uuid"
+                )
+                collection_uuids_list = self._call_entity_api(
+                    session=session,
+                    endpoint_base="collection",
+                    endpoint_suffix="entities",
+                    url_property="uuid"
                 )
 
-                es_uuids = set()
-                index_names = get_all_reindex_enabled_indice_names(self.INDICES)
+                # Only need this comparison for the live /reindex-all PUT call
+                if not self.skip_comparison:
+                    # Make calls to entity-api to get a list of uuids for rest of entity types
+                    sample_uuids_list = self._call_entity_api(
+                        session=session,
+                        endpoint_base="sample",
+                        endpoint_suffix="entities",
+                        url_property="uuid"
+                    )
+                    dataset_uuids_list = self._call_entity_api(
+                        session=session,
+                        endpoint_base="dataset",
+                        endpoint_suffix="entities",
+                        url_property="uuid"
+                    )
 
-                for index in index_names.keys():
-                    all_indices = index_names[index]
-                    # get URL for that index
-                    es_url = self.INDICES["indices"][index]["elasticsearch"]["url"].strip("/")
+                    # Merge into a big list that with no duplicates
+                    all_entities_uuids = set(
+                        source_uuids_list
+                        + sample_uuids_list
+                        + dataset_uuids_list
+                        + upload_uuids_list
+                        + collection_uuids_list
+                    )
 
-                    for actual_index in all_indices:
-                        es_uuids.update(get_uuids_from_es(actual_index, es_url))
+                    es_uuids = set()
+                    index_names = get_all_reindex_enabled_indice_names(self.INDICES)
 
-                # Find uuids that are in ES but not in neo4j, delete them in ES
-                uuids_to_delete = es_uuids - all_entities_uuids
-                update = BulkUpdate(deletes=list(uuids_to_delete))
+                    for index in index_names.keys():
+                        all_indices = index_names[index]
+                        # get URL for that index
+                        es_url = self.INDICES["indices"][index]["elasticsearch"]["url"].strip("/")
+
+                        for actual_index in all_indices:
+                            es_uuids.update(get_uuids_from_es(actual_index, es_url))
+
+                    # Find uuids that are in ES but not in neo4j, delete them in ES
+                    uuids_to_delete = es_uuids - all_entities_uuids
+                    update = BulkUpdate(deletes=list(uuids_to_delete))
+                    for index in self.index_config:
+                        failures = self._bulk_update(update, index.private, index.url)
+                        delete_failure_results[index.private] = failures
+                        failures = self._bulk_update(update, index.public, index.url)
+                        delete_failure_results[index.public] = failures
+
+                failure_results = {}
                 for index in self.index_config:
-                    failures = self._bulk_update(update, index.private, index.url)
-                    delete_failure_results[index.private] = failures
-                    failures = self._bulk_update(update, index.public, index.url)
-                    delete_failure_results[index.public] = failures
+                    failure_results[index.private] = []
+                    failure_results[index.public] = []
 
-            failure_results = {}
-            all_entities_uuids = list(all_entities_uuids)
-            n = self.BULK_UPDATE_SIZE
-            batched_uuids = [all_entities_uuids[i:i + n] for i in range(0, len(all_entities_uuids), n)]
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                futures = []
-                for index in self.index_config:
-                    for uuids in batched_uuids:
-                        futures.extend([executor.submit(self._upsert_index, uuids, index) for uuids in batched_uuids])
+                all_entities_uuids = list(all_entities_uuids)
+                n = self.BULK_UPDATE_SIZE
+                batched_uuids = [all_entities_uuids[i:i + n] for i in range(0, len(all_entities_uuids), n)]
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    futures = []
+                    for index in self.index_config:
+                        for uuids in batched_uuids:
+                            futures.extend([executor.submit(self._upsert_index, uuids, index, session) for uuids in batched_uuids])
 
-                for f in concurrent.futures.as_completed(futures):
-                    failures = f.result()
-                    for index, uuids in failures.items():
-                        failure_results.get(index, []).extend(uuids)
+                    for f in concurrent.futures.as_completed(futures):
+                        failures = f.result()
+                        for index, uuids in failures.items():
+                            failure_results[index].extend(uuids)
 
-            end = time.time()
+                end = time.time()
 
-            update_msg = "\n".join([
-                f"{index}: {len(uuids)} entities failed to update {', '.join(uuids)}"
-                for index, uuids in failure_results.items()
-            ])
-            delete_msg = "\n".join([
-                f"{index}: {len(uuids)} entities failed to delete {', '.join(uuids)}"
-                for index, uuids in delete_failure_results.items()
-            ])
+                update_msg = "\n".join([
+                    f"{index}: {len(uuids)} entities failed to update {', '.join(uuids)}"
+                    for index, uuids in failure_results.items()
+                ])
+                delete_msg = "\n".join([
+                    f"{index}: {len(uuids)} entities failed to delete {', '.join(uuids)}"
+                    for index, uuids in delete_failure_results.items()
+                ])
 
-            logger.info(
-                "\n"
-                "============== translate() Results ==============\n"
-                f"Finished executing translateAll().\n"
-                f"Total time: {end - start} seconds.\n"
-                "Update Results:\n"
-                f"{update_msg}\n"
-                "Delete Results:\n"
-                f"{delete_msg}"
-            )
+                logger.info(
+                    "\n"
+                    "============== translate_all() Results ==============\n"
+                    f"Total time: {end - start} seconds.\n"
+                    "Update Results:\n"
+                    f"Attempted to update {len(all_entities_uuids)} entities.\n"
+                    f"{update_msg}\n"
+                    "Delete Results:\n"
+                    f"Attempted to delete {len(uuids_to_delete) if uuids_to_delete else 0} entities.\n"
+                    f"{delete_msg}"
+                )
 
-        except Exception as e:
-            logger.error(e)
+            except Exception as e:
+                logger.error(e)
 
     def translate(self, entity_id: str):
         start = time.time()
-        try:
-            priv_document = self._call_entity_api(entity_id=entity_id, endpoint_base="documents", include_token=True)
-            logger.info(f"Start executing translate() on {priv_document['entity_type']} of uuid: {priv_document['uuid']}")
-
-            pub_document = None
-            if self.is_public(priv_document):
-                try:
-                    pub_document = self._call_entity_api(entity_id=entity_id, endpoint_base="documents", include_token=False)
-                except Exception:
-                    pass
-
-            entities_to_update = set()
-            if equals(priv_document["entity_type"], self.entities.DATASET):
-                # Get any Collections and Uploads which reference this Dataset entity
-                entities_to_update.update(self._call_entity_api(
+        with requests.Session() as session:
+            try:
+                priv_document = self._call_entity_api(
+                    session=session,
                     entity_id=entity_id,
-                    endpoint_base="entities",
-                    endpoint_suffix="collections",
-                    url_property="uuid",
-                ))
-                entities_to_update.update(self._call_entity_api(
-                    entity_id=entity_id,
-                    endpoint_base="entities",
-                    endpoint_suffix="uploads",
-                    url_property="uuid",
-                ))
-
-            failure_results = {}
-            for index in self.index_config:
-                results = self._upsert_index(
-                    entity_ids=entities_to_update,
-                    index=index,
-                    priv_entities=[priv_document],
-                    pub_entities=[pub_document] if pub_document else []
+                    endpoint_base="documents",
+                    include_token=True
                 )
-                failure_results.update(results)
+                logger.info(f"Start executing translate() on {priv_document['entity_type']} of uuid: {priv_document['uuid']}")
 
-            end = time.time()
-            msg = "\n".join([
-                f"{index}: {len(uuids)} entities failed {', '.join(uuids)}"
-                for index, uuids in failure_results.items()
-            ])
-            logger.info(
-                "\n"
-                "============== translate() Results ==============\n"
-                f"Finished executing translate() on {priv_document['entity_type']} of uuid: {entity_id}.\n"
-                f"Total time used: {end - start} seconds.\n"
-                "Results:\n"
-                f"{msg}"
-            )
+                pub_document = None
+                if self.is_public(priv_document):
+                    try:
+                        pub_document = self._call_entity_api(
+                            session=session,
+                            entity_id=entity_id,
+                            endpoint_base="documents",
+                            include_token=False
+                        )
+                    except Exception:
+                        pass
 
-        except Exception as e:
-            msg = f"Exceptions during executing translate(): {e}"
-            # Log the full stack trace, prepend a line with our message
-            logger.exception(msg)
+                entities_to_update = set()
+                if equals(priv_document["entity_type"], self.entities.DATASET):
+                    # Get any Collections and Uploads which reference this Dataset entity
+                    entities_to_update.update(self._call_entity_api(
+                        session=session,
+                        entity_id=entity_id,
+                        endpoint_base="entities",
+                        endpoint_suffix="collections",
+                        url_property="uuid",
+                    ))
+                    entities_to_update.update(self._call_entity_api(
+                        session=session,
+                        entity_id=entity_id,
+                        endpoint_base="entities",
+                        endpoint_suffix="uploads",
+                        url_property="uuid",
+                    ))
+
+                failure_results = {}
+                for index in self.index_config:
+                    results = self._upsert_index(
+                        entity_ids=entities_to_update,
+                        index=index,
+                        session=session,
+                        priv_entities=[priv_document],
+                        pub_entities=[pub_document] if pub_document else []
+                    )
+                    failure_results.update(results)
+
+                end = time.time()
+                msg = "\n".join([
+                    f"{index}: {len(uuids)} entities failed {', '.join(uuids)}"
+                    for index, uuids in failure_results.items()
+                ])
+                logger.info(
+                    "\n"
+                    "============== translate() Results ==============\n"
+                    f"uuid: {entity_id}, entity_type: {priv_document['entity_type']}\n"
+                    f"Total time used: {end - start} seconds.\n"
+                    "Results:\n"
+                    f"Attempted to update {len(entities_to_update) + 1} entities.\n"
+                    f"{msg}"
+                )
+            except Exception as e:
+                msg = f"Exceptions during executing translate(): {e}"
+                # Log the full stack trace, prepend a line with our message
+                logger.exception(msg)
 
     def update(self, entity_id, document, index=None, scope=None):
         if index is not None and index == "files":
@@ -475,26 +490,8 @@ class Translator(TranslatorInterface):
 
         return headers_dict
 
-    # Note: this entity dict input (if Dataset) has already removed ingest_metadata.files and
-    # ingest_metadata.metadata sub fields with empty string values from previous call
-    def _call_indexer(self, entity: dict):
-        logger.info(f"Start executing _call_indexer() on uuid: {entity['uuid']}, entity_type: {entity['entity_type']}")
-
-        try:
-            # Generate and write a document for the entity to each index group loaded from the configuration file.
-            for index_group in self.indices.keys():
-                self._transform_and_write_entity_to_index_group(entity=entity, index_group=index_group)
-            logger.info(f"Finished executing _call_indexer() on uuid: {entity['uuid']}, entity_type: {entity['entity_type']}")
-
-        except Exception as e:
-            msg = (
-                f"Encountered exception e={str(e)} executing _call_indexer() with "
-                f"uuid: {entity['uuid']}, entity_type: {entity['entity_type']}"
-            )
-            # Log the full stack trace, prepend a line with our message
-            logger.exception(msg)
-
-    def _upsert_index(self, entity_ids: list[str], index: Index, priv_entities: list[dict] = [], pub_entities: list[dict] = []):
+    def _upsert_index(self, entity_ids: list[str], index: Index, session: requests.Session,
+                      priv_entities: list[dict] = [], pub_entities: list[dict] = []):
         failure_results = {
             index.private: [],
             index.public: []
@@ -502,7 +499,12 @@ class Translator(TranslatorInterface):
         for entity_id in entity_ids:
             try:
                 # Retrieve the private document
-                priv_entity = self._call_entity_api(entity_id=entity_id, endpoint_base="documents", include_token=True)
+                priv_entity = self._call_entity_api(
+                    session=session,
+                    entity_id=entity_id,
+                    endpoint_base="documents",
+                    include_token=True
+                )
                 priv_entities.append(priv_entity)
             except Exception as e:
                 logger.exception(e)
@@ -511,7 +513,12 @@ class Translator(TranslatorInterface):
             if self.is_public(priv_entity):
                 try:
                     # Retrieve the public document
-                    pub_entity = self._call_entity_api(entity_id=entity_id, endpoint_base="documents", include_token=False)
+                    pub_entity = self._call_entity_api(
+                        session=session,
+                        entity_id=entity_id,
+                        endpoint_base="documents",
+                        include_token=False
+                    )
                     pub_entities.append(pub_entity)
                 except Exception:
                     pass
@@ -570,7 +577,8 @@ class Translator(TranslatorInterface):
         if response.status_code != 200:
             logger.error(f"Failed to bulk update index: {index} in elasticsearch.")
             logger.error(f"Error Message: {response.text}")
-            failure_uuids = [upsert["uuid"] for upsert in bulk_update.upserts].extend(bulk_update.deletes)
+            failure_uuids = [upsert["uuid"] for upsert in bulk_update.upserts]
+            failure_uuids.extend(bulk_update.deletes)
             return failure_uuids
 
         res_body = response.json().get("items", [])
@@ -580,7 +588,7 @@ class Translator(TranslatorInterface):
             if "update" in item or "delete" in item
         ]
 
-        failure_uuids = [item["_id"] for item in result_values if item["status"] != 200]
+        failure_uuids = [item["_id"] for item in result_values if item["status"] not in [200, 201]]
         return failure_uuids
 
     # This method is supposed to only retrieve Dataset|Source|Sample
@@ -588,7 +596,7 @@ class Translator(TranslatorInterface):
     # The returned data can either be an entity dict or a list of uuids (when `url_property` parameter is specified)
     def _call_entity_api(self, endpoint_base: str, entity_id: Optional[str] = None,
                          endpoint_suffix: Optional[str] = None, url_property: Optional[str] = None,
-                         include_token: bool = True):
+                         include_token: bool = True, session: Optional[requests.Session] = None):
 
         logger.info(f"Start executing _call_entity_api() on endpoint_base: {endpoint_base}, uuid: {entity_id}")
         url = f"{self.entity_api_url}/{endpoint_base}"
@@ -600,13 +608,14 @@ class Translator(TranslatorInterface):
             url = f"{url}?property={url_property}"
 
         headers = self.request_headers if include_token else None
-        response = requests.get(url, headers=headers, verify=False)
+        if session:
+            response = session.get(url, headers=headers, verify=False)
+        else:
+            response = requests.get(url, headers=headers, verify=False)
 
         if response.status_code != 200:
-            msg = f"_call_entity_api() failed on endpoint_base: {endpoint_base}, uuid: {entity_id}"
-
             # Log the full stack trace, prepend a line with our message
-            logger.exception(msg)
+            logger.exception(f"_call_entity_api() failed on endpoint_base: {endpoint_base}, uuid: {entity_id}")
             logger.debug(f"======_call_entity_api() status code from entity-api: {response.status_code}======")
             logger.debug("======_call_entity_api() response text from entity-api======")
             logger.debug(response.text)
