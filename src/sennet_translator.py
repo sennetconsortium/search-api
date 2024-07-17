@@ -6,6 +6,7 @@ import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
+from requests.adapters import HTTPAdapter, Retry
 from typing import Optional
 
 import requests
@@ -186,7 +187,7 @@ class Translator(TranslatorInterface):
     # TranslatorInterface methods
 
     def translate_all(self):
-        with requests.Session() as session:
+        with self._new_session() as session:
             try:
                 logger.info("############# Reindex Live Started #############")
                 start = time.time()
@@ -267,8 +268,7 @@ class Translator(TranslatorInterface):
                 with concurrent.futures.ThreadPoolExecutor() as executor:
                     futures = []
                     for index in self.index_config:
-                        for uuids in batched_uuids:
-                            futures.extend([executor.submit(self._upsert_index, uuids, index, session) for uuids in batched_uuids])
+                        futures.extend([executor.submit(self._upsert_index, uuids, index, session) for uuids in batched_uuids])
 
                     for f in concurrent.futures.as_completed(futures):
                         failures = f.result()
@@ -303,7 +303,7 @@ class Translator(TranslatorInterface):
 
     def translate(self, entity_id: str):
         start = time.time()
-        with requests.Session() as session:
+        with self._new_session() as session:
             try:
                 priv_document = self._call_entity_api(
                     session=session,
@@ -609,9 +609,9 @@ class Translator(TranslatorInterface):
 
         headers = self.request_headers if include_token else None
         if session:
-            response = session.get(url, headers=headers, verify=False)
+            response = session.get(url, headers=headers, verify=False, timeout=10)
         else:
-            response = requests.get(url, headers=headers, verify=False)
+            response = requests.get(url, headers=headers, verify=False, timeout=10)
 
         if response.status_code != 200:
             # Log the full stack trace, prepend a line with our message
@@ -641,6 +641,16 @@ class Translator(TranslatorInterface):
             self.indexer.delete_index(index)
         except Exception:
             pass
+
+    def _new_session(self):
+        session = requests.Session()
+        retries = Retry(
+            total=3,
+            backoff_factor=0.5,
+            status_forcelist=[500, 502, 503, 504],
+        )
+        session.mount(self.entity_api_url, HTTPAdapter(max_retries=retries))
+        return session
 
 
 def get_val_by_key(type_code, data, source_data_name):
