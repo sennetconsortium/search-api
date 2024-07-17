@@ -268,8 +268,7 @@ class Translator(TranslatorInterface):
                 with concurrent.futures.ThreadPoolExecutor() as executor:
                     futures = []
                     for index in self.index_config:
-                        for uuids in batched_uuids:
-                            futures.extend([executor.submit(self._upsert_index, uuids, index, session) for uuids in batched_uuids])
+                        futures.extend([executor.submit(self._upsert_index, uuids, index, session) for uuids in batched_uuids])
 
                     for f in concurrent.futures.as_completed(futures):
                         failures = f.result()
