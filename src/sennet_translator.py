@@ -60,7 +60,6 @@ class Translator(TranslatorInterface):
 
     def __init__(self, indices, app_client_id, app_client_secret, token, ubkg_instance=None):
         try:
-            self.ingest_api_soft_assay_url = indices["ingest_api_soft_assay_url"].strip("/")
             self.indices: dict = {}
             self.self_managed_indices: dict = {}
             # Do not include the indexes that are self managed
