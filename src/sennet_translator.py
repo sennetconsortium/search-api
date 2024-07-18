@@ -4,7 +4,7 @@ import logging
 import os
 import sys
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from requests.adapters import HTTPAdapter, Retry
 from typing import Optional
@@ -32,12 +32,6 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 logger = logging.getLogger(__name__)
-
-
-@dataclass(frozen=True)
-class BulkUpdate:
-    upserts: list[dict] = field(default_factory=list)
-    deletes: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -549,39 +543,19 @@ class Translator(TranslatorInterface):
 
         return failure_results
 
-    def _upsert(self, doc: dict, index: str, es_url: str):
-        url = f"{es_url}/{index}/_update/{doc['uuid']}"
-        body = {
-            "doc": doc,
-            "doc_as_upsert": True
-        }
-        response = requests.post(url, json=body, verify=False)
-        response.raise_for_status()
-
-    def _bulk_update(self, bulk_update: BulkUpdate, index: str, es_url: str):
-        if not bulk_update.upserts and not bulk_update.deletes:
+    def _bulk_update(self, updates: BulkUpdate, index: str, es_url: str):
+        if not updates.upserts and not updates.deletes:
             return []
 
-        url = f"{es_url}/{index}/_bulk"
-        headers = {"Content-Type": "application/x-ndjson"}
-
-        # Preparing ndjson content
-        upserts = [
-            f'{{"update":{{"_id":"{upsert["uuid"]}"}}}}\n{{"doc":{json.dumps(upsert, separators=(",", ":"))},"doc_as_upsert":true}}'
-            for upsert in bulk_update.upserts
-        ]
-        deletes = [f'{{ "delete": {{ "_id": "{delete_uuid}" }} }}' for delete_uuid in bulk_update.deletes]
-
-        body = "\n".join(upserts + deletes) + "\n"
-        response = requests.post(url, headers=headers, data=body, verify=False)
-        if response.status_code != 200:
+        res = bulk_update(bulk_update=updates, index=index, es_url=es_url)
+        if res.status_code != 200:
             logger.error(f"Failed to bulk update index: {index} in elasticsearch.")
-            logger.error(f"Error Message: {response.text}")
-            failure_uuids = [upsert["uuid"] for upsert in bulk_update.upserts]
-            failure_uuids.extend(bulk_update.deletes)
+            logger.error(f"Error Message: {res.text}")
+            failure_uuids = [upsert["uuid"] for upsert in updates.upserts]
+            failure_uuids.extend(updates.deletes)
             return failure_uuids
 
-        res_body = response.json().get("items", [])
+        res_body = res.json().get("items", [])
         result_values = [
             item.get("update") or item.get("delete")
             for item in res_body
