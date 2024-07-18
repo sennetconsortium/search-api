@@ -22,7 +22,7 @@ from libs.ontology import Ontology
 sys.path.append("search-adaptor/src")
 
 from indexer import Indexer
-from opensearch_helper_functions import get_uuids_from_es
+from opensearch_helper_functions import BulkUpdate, bulk_update, get_uuids_from_es
 from translator.tranlation_helper_functions import get_all_reindex_enabled_indice_names
 from translator.translator_interface import TranslatorInterface
 
