@@ -433,8 +433,12 @@ class Translator(TranslatorInterface):
 
         if "file_uuid" in document:
             # Confirm the Dataset to which the File entity belongs is published
-            dataset = self._call_entity_api(entity_id=document["dataset_uuid"], endpoint_base="documents")
-            return self.is_public(dataset)
+            try:
+                dataset = self._call_entity_api(entity_id=document["dataset_uuid"], endpoint_base="documents")
+                return self.is_public(dataset)
+            except Exception:
+                logger.error(f"Failed to confirm if the file's dataset is public for dataset uuid: {document['dataset_uuid']}")
+                return False
 
         if document["entity_type"] in ["Dataset", "Publication"]:
             # In case "status" not set
@@ -452,8 +456,12 @@ class Translator(TranslatorInterface):
             # If this Collection meets entity-api"s criteria for visibility to the world by
             # returning the value of its schema_constants.py DataVisibilityEnum.PUBLIC,
             # the Collection can be in the public index and retrieved by users who are not logged in.
-            entity_visibility = self._call_entity_api(entity_id=document["uuid"], endpoint_base="visibility")
-            is_public = entity_visibility == "public"
+            try:
+                entity_visibility = self._call_entity_api(entity_id=document["uuid"], endpoint_base="visibility")
+                is_public = entity_visibility == "public"
+            except Exception:
+                logger.error(f"Failed to confirm if collection is public for uuid: {document['uuid']}")
+                return False
 
         else:
             # In case "data_access_level" not set
