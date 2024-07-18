@@ -501,6 +501,7 @@ class Translator(TranslatorInterface):
                 )
                 priv_entities.append(priv_entity)
             except Exception as e:
+                failure_results[index.private].append(entity_id)
                 logger.exception(e)
                 continue
 
@@ -515,6 +516,7 @@ class Translator(TranslatorInterface):
                     )
                     pub_entities.append(pub_entity)
                 except Exception:
+                    failure_results[index.public].append(entity_id)
                     pass
 
             # Send bulk update when the batch size is reached
