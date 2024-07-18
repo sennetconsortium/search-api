@@ -22,7 +22,7 @@ from libs.ontology import Ontology
 sys.path.append("search-adaptor/src")
 
 from indexer import Indexer
-from opensearch_helper_functions import get_uuids_from_es
+from opensearch_helper_functions import BulkUpdate, bulk_update, get_uuids_from_es
 from translator.tranlation_helper_functions import get_all_reindex_enabled_indice_names
 from translator.translator_interface import TranslatorInterface
 
@@ -60,7 +60,6 @@ class Translator(TranslatorInterface):
 
     def __init__(self, indices, app_client_id, app_client_secret, token, ubkg_instance=None):
         try:
-            self.ingest_api_soft_assay_url = indices["ingest_api_soft_assay_url"].strip("/")
             self.indices: dict = {}
             self.self_managed_indices: dict = {}
             # Do not include the indexes that are self managed
@@ -501,6 +500,7 @@ class Translator(TranslatorInterface):
                 )
                 priv_entities.append(priv_entity)
             except Exception as e:
+                failure_results[index.private].append(entity_id)
                 logger.exception(e)
                 continue
 
@@ -515,6 +515,7 @@ class Translator(TranslatorInterface):
                     )
                     pub_entities.append(pub_entity)
                 except Exception:
+                    failure_results[index.public].append(entity_id)
                     pass
 
             # Send bulk update when the batch size is reached
