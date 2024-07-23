@@ -1,6 +1,6 @@
 settings:
   index:
-    mapping.total_fields.limit: 4500
+    mapping.total_fields.limit: 3500
     query.default_field: 2048
 
 mappings:
@@ -60,6 +60,16 @@ mappings:
         match: "^(.*_count)$"
         mapping:
           type: float
+
+    - barcode_offset:
+        path_match: "*.barcode_offset"
+        mapping:
+          type: keyword
+
+    - barcode_size:
+        path_match: "*.barcode_size"
+        mapping:
+          type: keyword
 
     # Must handle the above offending fields before this "catch all" mapping
     # This emulates the default ES behavior, giving us a "keyword" subfield, with a "keyword" type
