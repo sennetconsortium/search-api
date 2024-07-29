@@ -1,0 +1,28 @@
+# this file allows multiple Elasticsearch indices to be configured and accessible
+# via the search endpoints
+# ​
+# default index name for endpoints that don't specify an index
+default_index: entities
+# ​
+# specify multiple indices
+indices:
+  entities:
+    active: true
+    public: sn_dev_public_entities
+    private: sn_dev_consortium_entities
+    reindex_enabled: true
+    #document_source_endpoint: http://localhost:3333/
+    document_source_endpoint: https://entity-api.dev.sennetconsortium.org/
+    #document_source_endpoint: http://localhost:5002
+    elasticsearch:
+      url: "https://search-sennet-dev-test-pvt7ip7u27bzzgz6eo5bmbxbge.us-east-1.es.amazonaws.com/"
+      #url: "http://localhost:9200/"
+      mappings: "sennet_translation/search-default-config.yaml"
+  files:
+    active: true
+    reindex_enabled: false
+    public: sn_dev_public_files
+    private: sn_dev_consortium_files
+    elasticsearch:
+      url: <ES URL>
+      mappings: "sennet_translation/file-default-config.yaml"

@@ -16,4 +16,4 @@ LARGE_RESPONSE_THRESHOLD = 9.9*(2**20)
 
 UBKG_SERVER = 'https://ontology.api.hubmapconsortium.org/'
 UBKG_ENDPOINT_VALUESET = 'valueset?parent_sab=SENNET&parent_code={code}&child_sabs=SENNET'
-UBKG_CODES = '{"specimen_categories":"C020076","organ_types":{"code": "C000008", "key": "organs", "endpoint": "organs?application_context=SENNET"}, "entities": "C000012", "source_types":"C050020", "assay_types":{"code": "C004000", "key": "datasets", "endpoint": "datasets?application_context=SENNET"}}'
+UBKG_CODES = '{"specimen_categories":"C020076","organ_types":{"code": "C000008", "key": "organs", "endpoint": "organs?application_context=SENNET"}, "entities": "C000012", "source_types":"C050020"}'
