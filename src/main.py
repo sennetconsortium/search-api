@@ -3,8 +3,6 @@ import os
 import sys
 from pathlib import Path
 import logging
-import time
-
 from flask import Flask
 from yaml import safe_load
 
@@ -14,7 +12,6 @@ from atlas_consortia_commons.rest import *
 from atlas_consortia_commons.ubkg.ubkg_sdk import init_ontology
 
 sys.path.append("search-adaptor/src")
-import libs.sennet_endpoints
 search_adaptor_module = importlib.import_module("app", "search-adaptor/src")
 
 # Root logger configuration
@@ -55,11 +52,9 @@ translator_module = importlib.import_module("sennet_translator")
 
 sys.path.append("libs")
 
-sennet_blueprint = libs.sennet_endpoints.sennet_blueprint
-
 
 # This `app` will be imported by wsgi.py when deployed with uWSGI server
-search_api_instance = search_adaptor_module.SearchAPI(config, translator_module, sennet_blueprint)
+search_api_instance = search_adaptor_module.SearchAPI(config, translator_module)
 app = search_api_instance.app
 
 ####################################################################################################
