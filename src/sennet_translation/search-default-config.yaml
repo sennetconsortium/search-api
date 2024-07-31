@@ -45,6 +45,9 @@ mappings:
         path_match: "*.organ_donor_data.data_value"
         mapping:
           type: keyword
+
+    # These fields are problematic with documents containing antibodies.
+    # Antibodies have "_value" and "_number" fields that are not numeric.
     - metadata_value_fields:
         match_pattern: "regex"
         match: "^(.*_value)$"
