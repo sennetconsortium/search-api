@@ -463,6 +463,9 @@ class Translator(TranslatorInterface):
                 logger.error(f"Failed to confirm if collection is public for uuid: {document['uuid']}")
                 return False
 
+        elif document["entity_type"] == "Upload":
+            is_public = False
+
         else:
             # In case "data_access_level" not set
             if "data_access_level" in document:
