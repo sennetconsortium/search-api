@@ -1,6 +1,6 @@
 settings:
   index:
-    mapping.total_fields.limit: 4000
+    mapping.total_fields.limit: 3500
     query.default_field: 2048
 
 mappings:
@@ -45,6 +45,9 @@ mappings:
         path_match: "*.organ_donor_data.data_value"
         mapping:
           type: keyword
+
+    # These fields are problematic with documents containing antibodies.
+    # Antibodies have "_value" and "_number" fields that are not numeric.
     - metadata_value_fields:
         match_pattern: "regex"
         match: "^(.*_value)$"
@@ -60,6 +63,16 @@ mappings:
         match: "^(.*_count)$"
         mapping:
           type: float
+
+    - barcode_offset:
+        path_match: "*.barcode_offset"
+        mapping:
+          type: keyword
+
+    - barcode_size:
+        path_match: "*.barcode_size"
+        mapping:
+          type: keyword
 
     # Must handle the above offending fields before this "catch all" mapping
     # This emulates the default ES behavior, giving us a "keyword" subfield, with a "keyword" type
