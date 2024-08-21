@@ -38,128 +38,19 @@ components:
           type: string
         primary:
           type: boolean
-        vitessce-hints:
-          type: array
-          items:
-            type: string
     SearchResponse:
       type: object
       description: The response from calls to /search will include objects from indices related for entities, files, or antibodies. Schema elements are documented in [entity-api](https://smart-api.info/ui/0065e419668f3336a40d1f5ab89c6ba3).
 tags:
   - name: 'Search API, Elasticsearch'
     description: Operations pertaining to datasets indexed in Elasticsearch
-  - name: assaytype
-    description: Operations pertaining to assay types
+
 
 externalDocs:
   description: Elasticsearch API Documentation
   url: https://www.elastic.co/guide/en/sennet_translation/reference/current/search-your-data.html
 
 paths:
-
-  /assaytype:
-    get:
-      tags:
-        - assaytype
-      summary: Get a list of SenNet assay type names or descriptive dicts
-      operationId: listAssayType
-      parameters:
-        - name: primary
-          in: query
-          description: >
-             If present and true, restrict list to primary datasets.
-             A primary dataset is one for which no parent is a dataset.
-             If present and false, restrict list to datasets which are not primary.
-          required: false
-          schema:
-            type: boolean
-        - name: simple
-          in: query
-          description: >
-             If present and true, list only assay type names.  Otherwise return a list
-             of descriptive dicts.
-          required: false
-          schema:
-            type: boolean
-      responses:
-        "200":
-          description: Successful operation
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/AssayTypeReturnDict'
-        "400":
-          description: The user sent a bad parameter (e.g. a nonexistent group name) or there was a system error
-        "401":
-          description: User's token is not valid
-
-  /assaytype/{name}:
-    get:
-      tags:
-        - assaytype
-      summary: Get a descriptive dict for a single assay type
-      operationId: getAssayType
-      parameters:
-        - name: primary
-          in: query
-          description: >
-             If present and true, restrict list to primary datasets.
-             A primary dataset is one for which no parent is a dataset.
-             If present and false, restrict list to datasets which are not primary.
-          required: false
-          schema:
-            type: boolean
-        - name: simple
-          in: query
-          description: >
-             If present and true, list only assay type names.  Otherwise return a list
-             of descriptive dicts.
-          required: false
-          schema:
-            type: boolean
-        - name: name
-          in: path
-          description: An assay type name or single-word alternate name
-          required: true
-          schema:
-            type: string
-      responses:
-        "200":
-          description: Successful operation
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AssayTypeReturnDict'
-        "400":
-          description: The user sent a bad parameter (e.g. a nonexistent group name) or there was a system error
-        "401":
-          description: User's token is not valid
-
-  /assayname:
-    post:
-      tags:
-        - assaytype
-      summary: Get a descriptive dict for a single assay type
-      operationId: postAssayName
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AssayTypeQueryDict'
-      responses:
-        "200":
-          description: Successful operation
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AssayTypeReturnDict'
-        "400":
-          description: The user sent a bad parameter (e.g. a nonexistent group name) or there was a system error
-        "401":
-          description: User's token is not valid
-
   /indices:
     get:
       tags:
@@ -191,7 +82,7 @@ paths:
       tags:
         - search
       summary: Executes an Elasticsearch DSL query JSON via POST and returns hits that match the query.
-      description: To execute a query, the POST method must provide 1) a request body that specifies an [Elasticsearch Query DSL statement](https://www.elastic.co/guide/en/elasticsearch/reference/current/search-your-data.html) 2) a bearer token in the Authorization header supplied by HuBMAP. Results are limited to those authorized by the bearer token. Uses the <strong>hm_consortium_entities</strong> index by default.
+      description: To execute a query, the POST method must provide 1) a request body that specifies an [Elasticsearch Query DSL statement](https://www.elastic.co/guide/en/elasticsearch/reference/current/search-your-data.html) 2) a bearer token in the Authorization header supplied by SenNet. Results are limited to those authorized by the bearer token. Uses the <strong>hm_consortium_entities</strong> index by default.
       operationId: search-post
       requestBody:
         description: A JSON that describes a [DSL query](https://www.elastic.co/guide/en/elasticsearch/reference/current/query-dsl.html). The query will likely be a compound boolean.
@@ -240,7 +131,7 @@ paths:
       tags:
         - search_by_index
       summary: Executes an Elasticsearch DSL query JSON via POST and returns hits that match the query. The response is limited to hits against the specified index_name parameter. Values for index_name can be obtained by calling the /indices endpoint.
-      description: To execute a query, the POST method must provide 1) a request body that specifies an [Elasticsearch Query DSL statement](https://www.elastic.co/guide/en/elasticsearch/reference/current/search-your-data.html) 2) a bearer token in the Authorization header supplied by HuBMAP. Results are limited to those authorized by the bearer token. Uses the <strong>hm_consortium_entities</strong> index by default.
+      description: To execute a query, the POST method must provide 1) a request body that specifies an [Elasticsearch Query DSL statement](https://www.elastic.co/guide/en/elasticsearch/reference/current/search-your-data.html) 2) a bearer token in the Authorization header supplied by SenNet. Results are limited to those authorized by the bearer token. Uses the <strong>hm_consortium_entities</strong> index by default.
       operationId: search-post-by-index
       parameters:
         - name: index_name
@@ -338,7 +229,5 @@ paths:
           description: Successful operation
           content:
             application/json:
-              schema:
-                $ref: '#/components/schemas/AssayTypeReturnDict'
         "404":
           description: The requested index could not be found
