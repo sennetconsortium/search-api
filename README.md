@@ -2,7 +2,7 @@
 
 The SenNet Search API is a thin wrapper of the Elasticsearch. It handles data indexing and reindexing into the backend Elasticsearch. It also accepts the search query and passes through to the Elasticsearch with data access security check.
 
-The API documentation is available on SmartAPI at [to replace with smart API link]
+The API documentation is available on [SmartAPI](https://smart-api.info/ui/10ed9b5eb8ff960d4431befc591ed842)
 
 ## Working with submodule
 
