@@ -321,28 +321,10 @@ class Translator(TranslatorInterface):
                     except Exception:
                         pass
 
-                entities_to_update = set()
-                if equals(priv_document["entity_type"], self.entities.DATASET):
-                    # Get any Collections and Uploads which reference this Dataset entity
-                    entities_to_update.update(self._call_entity_api(
-                        session=session,
-                        entity_id=entity_id,
-                        endpoint_base="entities",
-                        endpoint_suffix="collections",
-                        url_property="uuid",
-                    ))
-                    entities_to_update.update(self._call_entity_api(
-                        session=session,
-                        entity_id=entity_id,
-                        endpoint_base="entities",
-                        endpoint_suffix="uploads",
-                        url_property="uuid",
-                    ))
-
                 failure_results = {}
                 for index in self.index_config:
                     results = self._upsert_index(
-                        entity_ids=entities_to_update,
+                        entity_ids=[],
                         index=index,
                         session=session,
                         priv_entities=[priv_document],
@@ -361,7 +343,7 @@ class Translator(TranslatorInterface):
                     f"uuid: {entity_id}, entity_type: {priv_document['entity_type']}\n"
                     f"Total time used: {end - start} seconds.\n"
                     "Results:\n"
-                    f"Attempted to update {len(entities_to_update) + 1} entities.\n"
+                    f"Attempted to update 1 entity.\n"
                     f"{msg}"
                 )
             except Exception as e:
