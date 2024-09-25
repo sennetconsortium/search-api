@@ -50,7 +50,7 @@ class Translator(TranslatorInterface):
     INDICES = {}
     TRANSFORMERS = {}  # Not used in SenNet
     DEFAULT_ENTITY_API_URL = ""
-    BULK_UPDATE_SIZE = 100
+    BULK_UPDATE_SIZE = 50
 
     failed_entity_api_calls = []
     failed_entity_ids = []
