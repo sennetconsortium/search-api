@@ -4,6 +4,9 @@
 # default index name for endpoints that don't specify an index
 default_index: entities
 
+# used for bulk updates to elastic search (default is 50)
+bulk_update_size: 50
+
 # specify multiple indices
 indices:
   entities: 

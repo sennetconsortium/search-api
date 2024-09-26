@@ -11,7 +11,6 @@ from typing import Optional
 
 import requests
 from atlas_consortia_commons.object import enum_val
-from atlas_consortia_commons.string import equals
 from atlas_consortia_commons.ubkg import initialize_ubkg
 from flask import Flask, Response
 from hubmap_commons.hm_auth import AuthHelper  # HuBMAP commons
@@ -50,7 +49,6 @@ class Translator(TranslatorInterface):
     INDICES = {}
     TRANSFORMERS = {}  # Not used in SenNet
     DEFAULT_ENTITY_API_URL = ""
-    BULK_UPDATE_SIZE = 50
 
     failed_entity_api_calls = []
     failed_entity_ids = []
@@ -112,6 +110,8 @@ class Translator(TranslatorInterface):
 
         # Add index_version by parsing the VERSION file
         self.index_version = ((Path(__file__).absolute().parent.parent / "VERSION").read_text()).strip()
+
+        self.bulk_update_size = indices.get("bulk_update_size", 50)
 
     # Public methods
 
@@ -258,7 +258,7 @@ class Translator(TranslatorInterface):
                     failure_results[index.public] = []
 
                 all_entities_uuids = list(all_entities_uuids)
-                n = self.BULK_UPDATE_SIZE
+                n = self.bulk_update_size
                 batched_uuids = [all_entities_uuids[i:i + n] for i in range(0, len(all_entities_uuids), n)]
                 with concurrent.futures.ThreadPoolExecutor() as executor:
                     futures = []
@@ -515,7 +515,8 @@ class Translator(TranslatorInterface):
                     pass
 
             # Send bulk update when the batch size is reached
-            if len(priv_entities) >= self.BULK_UPDATE_SIZE or len(pub_entities) >= self.BULK_UPDATE_SIZE:
+            max_size = self.bulk_update_size
+            if len(priv_entities) >= max_size or len(pub_entities) >= max_size:
                 priv_update = BulkUpdate(upserts=priv_entities)
                 pub_update = BulkUpdate(upserts=pub_entities)
 
