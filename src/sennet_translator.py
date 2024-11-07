@@ -274,12 +274,13 @@ class Translator(TranslatorInterface):
 
                 end = time.time()
 
+                nl = "\n"
                 update_msg = "\n".join([
-                    f"{index}: {len(uuids)} entities failed to update {', '.join(uuids)}"
+                    f"{index}: {len(uuids)} entities failed to update{nl}{f'{nl}'.join(uuids)}"
                     for index, uuids in failure_results.items()
                 ])
                 delete_msg = "\n".join([
-                    f"{index}: {len(uuids)} entities failed to delete {', '.join(uuids)}"
+                    f"{index}: {len(uuids)} entities failed to delete{nl}{f'{nl}'.join(uuids)}"
                     for index, uuids in delete_failure_results.items()
                 ])
 
@@ -287,10 +288,10 @@ class Translator(TranslatorInterface):
                     msg = (
                         "\n"
                         "============== translate_all() Results ==============\n"
-                        f"Total time: {end - start} seconds.\n"
+                        f"Total time: {end - start} seconds.\n\n"
                         "Update Results:\n"
                         f"Attempted to update {len(all_entities_uuids)} entities.\n"
-                        f"{update_msg}\n"
+                        f"{update_msg}\n\n"
                         "Delete Results:\n"
                         f"Attempted to delete {len(uuids_to_delete) if uuids_to_delete else 0} entities.\n"
                         f"{delete_msg}"
@@ -340,8 +341,10 @@ class Translator(TranslatorInterface):
                     failure_results.update(results)
 
                 end = time.time()
+
+                nl = "\n"
                 msg = "\n".join([
-                    f"{index}: {len(uuids)} entities failed {', '.join(uuids)}"
+                    f"{index}: {len(uuids)} entities failed{nl}{f'{nl}'.join(uuids)}"
                     for index, uuids in failure_results.items()
                 ])
                 logger.info(
@@ -503,7 +506,7 @@ class Translator(TranslatorInterface):
                 )
                 priv_entities.append(priv_entity)
             except Exception as e:
-                failure_results[index.private].append(entity_id)
+                failure_results[index.private].append(f"{entity_id}: Update - {str(e)}")
                 logger.exception(e)
                 continue
 
@@ -517,8 +520,8 @@ class Translator(TranslatorInterface):
                         include_token=False
                     )
                     pub_entities.append(pub_entity)
-                except Exception:
-                    failure_results[index.public].append(entity_id)
+                except Exception as e:
+                    failure_results[index.public].append(f"{entity_id}: Update - {str(e)}")
                     pass
 
             # Send bulk update when the batch size is reached
@@ -556,8 +559,8 @@ class Translator(TranslatorInterface):
         if res.status_code != 200:
             logger.error(f"Failed to bulk update index: {index} in elasticsearch.")
             logger.error(f"Error Message: {res.text}")
-            failure_uuids = [upsert["uuid"] for upsert in updates.upserts]
-            failure_uuids.extend(updates.deletes)
+            failure_uuids = [f"{upsert['uuid']}: Update - {res.text}" for upsert in updates.upserts]
+            failure_uuids.extend([f"{delete_uuid}: Delete - {res.text}" for delete_uuid in updates.deletes])
             return failure_uuids
 
         res_body = res.json().get("items", [])
@@ -567,7 +570,10 @@ class Translator(TranslatorInterface):
             if "update" in item or "delete" in item
         ]
 
-        failure_uuids = [item["_id"] for item in result_values if item["status"] not in [200, 201]]
+        failure_uuids = [
+            f"{item['_id']}: Update - {item.get('error', {}).get('reason')}"
+            for item in result_values if item["status"] not in [200, 201]
+        ]
         return failure_uuids
 
     # This method is supposed to only retrieve Dataset|Source|Sample
