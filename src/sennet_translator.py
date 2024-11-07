@@ -12,8 +12,9 @@ from typing import Optional
 import requests
 from atlas_consortia_commons.object import enum_val
 from atlas_consortia_commons.ubkg import initialize_ubkg
-from flask import Flask, Response
+from flask import Flask, Response, Config
 from hubmap_commons.hm_auth import AuthHelper  # HuBMAP commons
+from hubmap_commons.S3_worker import S3Worker
 from yaml import safe_load
 
 from libs.ontology import Ontology
@@ -282,17 +283,23 @@ class Translator(TranslatorInterface):
                     for index, uuids in delete_failure_results.items()
                 ])
 
-                logger.info(
-                    "\n"
-                    "============== translate_all() Results ==============\n"
-                    f"Total time: {end - start} seconds.\n"
-                    "Update Results:\n"
-                    f"Attempted to update {len(all_entities_uuids)} entities.\n"
-                    f"{update_msg}\n"
-                    "Delete Results:\n"
-                    f"Attempted to delete {len(uuids_to_delete) if uuids_to_delete else 0} entities.\n"
-                    f"{delete_msg}"
-                )
+                try:
+                    msg = (
+                        "\n"
+                        "============== translate_all() Results ==============\n"
+                        f"Total time: {end - start} seconds.\n"
+                        "Update Results:\n"
+                        f"Attempted to update {len(all_entities_uuids)} entities.\n"
+                        f"{update_msg}\n"
+                        "Delete Results:\n"
+                        f"Attempted to delete {len(uuids_to_delete) if uuids_to_delete else 0} entities.\n"
+                        f"{delete_msg}"
+                    )
+                    logger.info(msg)
+                except OSError:
+                    # Too large to print, store in S3
+                    s3_url = self._print_to_s3(msg)
+                    logger.info(f"Results stored in S3: {s3_url}")
 
             except Exception as e:
                 logger.error(e)
@@ -623,6 +630,25 @@ class Translator(TranslatorInterface):
         )
         session.mount(self.entity_api_url, HTTPAdapter(max_retries=retries))
         return session
+
+    def _print_to_s3(self, text: str):
+        # We must load from config file since we're not in the flask app context
+        file_dir = os.path.abspath(os.path.dirname(__file__))
+        cfg_dir = os.path.join(file_dir, "instance")
+        cfg = Config(cfg_dir)
+        if cfg.from_pyfile("app.cfg") is False:
+            raise ValueError("Failed to load app.cfg while trying to print to S3")
+
+        s3_worker = S3Worker(
+            cfg["AWS_ACCESS_KEY_ID"],
+            cfg["AWS_SECRET_ACCESS_KEY"],
+            cfg["AWS_S3_BUCKET_NAME"],
+            cfg["AWS_OBJECT_URL_EXPIRATION_IN_SECS"],
+            0,  # always meets the threshold
+            cfg["AWS_S3_OBJECT_RESULTS_PREFIX"],
+        )
+        url = s3_worker.stash_response_body_if_big(text)
+        return url
 
 
 def get_val_by_key(type_code, data, source_data_name):
