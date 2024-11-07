@@ -556,6 +556,14 @@ class Translator(TranslatorInterface):
             return []
 
         res = bulk_update(bulk_update=updates, index=index, es_url=es_url)
+        if res.status_code == 413:
+            # If the request is too large, split the request in half and try again, recursively
+            upsert_half = len(updates.upserts) // 2
+            delete_half = len(updates.deletes) // 2
+            first_half = BulkUpdate(upserts=updates.upserts[:upsert_half], deletes=updates.deletes[:delete_half])
+            second_half = BulkUpdate(upserts=updates.upserts[upsert_half:], deletes=updates.deletes[delete_half:])
+            return self._bulk_update(first_half, index, es_url) + self._bulk_update(second_half, index, es_url)
+
         if res.status_code != 200:
             logger.error(f"Failed to bulk update index: {index} in elasticsearch.")
             logger.error(f"Error Message: {res.text}")
