@@ -1,4 +1,5 @@
 import concurrent.futures
+import copy
 import json
 import logging
 import os
@@ -265,7 +266,9 @@ class Translator(TranslatorInterface):
                     futures = []
                     for index in self.index_config:
                         for uuids in batched_uuids:
-                            futures.append(executor.submit(self._upsert_index, uuids, index, session))
+                            uuids_copy = copy.deepcopy(uuids)
+                            index_copy = copy.deepcopy(index)
+                            futures.append(executor.submit(self._upsert_index, uuids_copy, index_copy, session))
 
                     for f in concurrent.futures.as_completed(futures):
                         failures = f.result()
