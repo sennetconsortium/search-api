@@ -246,9 +246,9 @@ class Translator(TranslatorInterface):
                     uuids_to_delete = es_uuids - all_entities_uuids
                     update = BulkUpdate(deletes=list(uuids_to_delete))
                     for index in self.index_config:
-                        failures = self._bulk_update(update, index.private, index.url)
+                        failures = self._bulk_update(update, index.private, index.url, session)
                         delete_failure_results[index.private] = failures
-                        failures = self._bulk_update(update, index.public, index.url)
+                        failures = self._bulk_update(update, index.public, index.url, session)
                         delete_failure_results[index.public] = failures
 
                     # No need to update the entities that were just deleted
@@ -533,10 +533,10 @@ class Translator(TranslatorInterface):
                 priv_update = BulkUpdate(upserts=priv_entities)
                 pub_update = BulkUpdate(upserts=pub_entities)
 
-                failures = self._bulk_update(priv_update, index.private, index.url)
+                failures = self._bulk_update(priv_update, index.private, index.url, session)
                 failure_results[index.private].extend(failures)
 
-                failures = self._bulk_update(pub_update, index.public, index.url)
+                failures = self._bulk_update(pub_update, index.public, index.url, session)
                 failure_results[index.public].extend(failures)
 
                 priv_entities = []
@@ -545,27 +545,27 @@ class Translator(TranslatorInterface):
         # Send bulk update for the remaining entities
         if priv_entities:
             priv_update = BulkUpdate(upserts=priv_entities)
-            failures = self._bulk_update(priv_update, index.private, index.url)
+            failures = self._bulk_update(priv_update, index.private, index.url, session)
             failure_results[index.private].extend(failures)
         if pub_entities:
             pub_update = BulkUpdate(upserts=pub_entities)
-            failures = self._bulk_update(pub_update, index.public, index.url)
+            failures = self._bulk_update(pub_update, index.public, index.url, session)
             failure_results[index.public].extend(failures)
 
         return failure_results
 
-    def _bulk_update(self, updates: BulkUpdate, index: str, es_url: str):
+    def _bulk_update(self, updates: BulkUpdate, index: str, es_url: str, session: requests.Session = None):
         if not updates.upserts and not updates.deletes:
             return []
 
-        res = bulk_update(bulk_update=updates, index=index, es_url=es_url)
+        res = bulk_update(bulk_update=updates, index=index, es_url=es_url, session=session)
         if res.status_code == 413:
             # If the request is too large, split the request in half and try again, recursively
             upsert_half = len(updates.upserts) // 2
             delete_half = len(updates.deletes) // 2
             first_half = BulkUpdate(upserts=updates.upserts[:upsert_half], deletes=updates.deletes[:delete_half])
             second_half = BulkUpdate(upserts=updates.upserts[upsert_half:], deletes=updates.deletes[delete_half:])
-            return self._bulk_update(first_half, index, es_url) + self._bulk_update(second_half, index, es_url)
+            return self._bulk_update(first_half, index, es_url, session) + self._bulk_update(second_half, index, es_url, session)
 
         if res.status_code != 200:
             logger.error(f"Failed to bulk update index: {index} in elasticsearch.")
@@ -643,9 +643,13 @@ class Translator(TranslatorInterface):
         retries = Retry(
             total=3,
             backoff_factor=0.5,
-            status_forcelist=[500, 502, 503, 504],
+            status_forcelist=[429, 500, 502, 503, 504],
         )
         session.mount(self.entity_api_url, HTTPAdapter(max_retries=retries))
+
+        for index in self.index_config:
+            session.mount(index.url, HTTPAdapter(max_retries=retries))
+
         return session
 
     def _print_to_s3(self, text: str):
