@@ -1,4 +1,5 @@
 import concurrent.futures
+import copy
 import json
 import logging
 import os
@@ -12,8 +13,9 @@ from typing import Optional
 import requests
 from atlas_consortia_commons.object import enum_val
 from atlas_consortia_commons.ubkg import initialize_ubkg
-from flask import Flask, Response
+from flask import Flask, Response, Config
 from hubmap_commons.hm_auth import AuthHelper  # HuBMAP commons
+from hubmap_commons.S3_worker import S3Worker
 from yaml import safe_load
 
 from libs.ontology import Ontology
@@ -244,9 +246,9 @@ class Translator(TranslatorInterface):
                     uuids_to_delete = es_uuids - all_entities_uuids
                     update = BulkUpdate(deletes=list(uuids_to_delete))
                     for index in self.index_config:
-                        failures = self._bulk_update(update, index.private, index.url)
+                        failures = self._bulk_update(update, index.private, index.url, session)
                         delete_failure_results[index.private] = failures
-                        failures = self._bulk_update(update, index.public, index.url)
+                        failures = self._bulk_update(update, index.public, index.url, session)
                         delete_failure_results[index.public] = failures
 
                     # No need to update the entities that were just deleted
@@ -264,7 +266,9 @@ class Translator(TranslatorInterface):
                     futures = []
                     for index in self.index_config:
                         for uuids in batched_uuids:
-                            futures.append(executor.submit(self._upsert_index, uuids, index, session))
+                            uuids_copy = copy.deepcopy(uuids)
+                            index_copy = copy.deepcopy(index)
+                            futures.append(executor.submit(self._upsert_index, uuids_copy, index_copy, session))
 
                     for f in concurrent.futures.as_completed(futures):
                         failures = f.result()
@@ -273,26 +277,33 @@ class Translator(TranslatorInterface):
 
                 end = time.time()
 
+                nl = "\n"
                 update_msg = "\n".join([
-                    f"{index}: {len(uuids)} entities failed to update {', '.join(uuids)}"
+                    f"{index}: {len(uuids)} entities failed to update{nl}{f'{nl}'.join(uuids)}"
                     for index, uuids in failure_results.items()
                 ])
                 delete_msg = "\n".join([
-                    f"{index}: {len(uuids)} entities failed to delete {', '.join(uuids)}"
+                    f"{index}: {len(uuids)} entities failed to delete{nl}{f'{nl}'.join(uuids)}"
                     for index, uuids in delete_failure_results.items()
                 ])
 
-                logger.info(
-                    "\n"
-                    "============== translate_all() Results ==============\n"
-                    f"Total time: {end - start} seconds.\n"
-                    "Update Results:\n"
-                    f"Attempted to update {len(all_entities_uuids)} entities.\n"
-                    f"{update_msg}\n"
-                    "Delete Results:\n"
-                    f"Attempted to delete {len(uuids_to_delete) if uuids_to_delete else 0} entities.\n"
-                    f"{delete_msg}"
-                )
+                try:
+                    msg = (
+                        "\n"
+                        "============== translate_all() Results ==============\n"
+                        f"Total time: {end - start} seconds.\n\n"
+                        "Update Results:\n"
+                        f"Attempted to update {len(all_entities_uuids)} entities.\n"
+                        f"{update_msg}\n\n"
+                        "Delete Results:\n"
+                        f"Attempted to delete {len(uuids_to_delete) if uuids_to_delete else 0} entities.\n"
+                        f"{delete_msg}"
+                    )
+                    logger.info(msg)
+                except OSError:
+                    # Too large to print, store in S3
+                    s3_url = self._print_to_s3(msg)
+                    logger.info(f"Results stored in S3: {s3_url}")
 
             except Exception as e:
                 logger.error(e)
@@ -333,8 +344,10 @@ class Translator(TranslatorInterface):
                     failure_results.update(results)
 
                 end = time.time()
+
+                nl = "\n"
                 msg = "\n".join([
-                    f"{index}: {len(uuids)} entities failed {', '.join(uuids)}"
+                    f"{index}: {len(uuids)} entities failed{nl}{f'{nl}'.join(uuids)}"
                     for index, uuids in failure_results.items()
                 ])
                 logger.info(
@@ -496,7 +509,7 @@ class Translator(TranslatorInterface):
                 )
                 priv_entities.append(priv_entity)
             except Exception as e:
-                failure_results[index.private].append(entity_id)
+                failure_results[index.private].append(f"{entity_id}: Update - {str(e)}")
                 logger.exception(e)
                 continue
 
@@ -510,8 +523,8 @@ class Translator(TranslatorInterface):
                         include_token=False
                     )
                     pub_entities.append(pub_entity)
-                except Exception:
-                    failure_results[index.public].append(entity_id)
+                except Exception as e:
+                    failure_results[index.public].append(f"{entity_id}: Update - {str(e)}")
                     pass
 
             # Send bulk update when the batch size is reached
@@ -520,10 +533,10 @@ class Translator(TranslatorInterface):
                 priv_update = BulkUpdate(upserts=priv_entities)
                 pub_update = BulkUpdate(upserts=pub_entities)
 
-                failures = self._bulk_update(priv_update, index.private, index.url)
+                failures = self._bulk_update(priv_update, index.private, index.url, session)
                 failure_results[index.private].extend(failures)
 
-                failures = self._bulk_update(pub_update, index.public, index.url)
+                failures = self._bulk_update(pub_update, index.public, index.url, session)
                 failure_results[index.public].extend(failures)
 
                 priv_entities = []
@@ -532,25 +545,33 @@ class Translator(TranslatorInterface):
         # Send bulk update for the remaining entities
         if priv_entities:
             priv_update = BulkUpdate(upserts=priv_entities)
-            failures = self._bulk_update(priv_update, index.private, index.url)
+            failures = self._bulk_update(priv_update, index.private, index.url, session)
             failure_results[index.private].extend(failures)
         if pub_entities:
             pub_update = BulkUpdate(upserts=pub_entities)
-            failures = self._bulk_update(pub_update, index.public, index.url)
+            failures = self._bulk_update(pub_update, index.public, index.url, session)
             failure_results[index.public].extend(failures)
 
         return failure_results
 
-    def _bulk_update(self, updates: BulkUpdate, index: str, es_url: str):
+    def _bulk_update(self, updates: BulkUpdate, index: str, es_url: str, session: requests.Session = None):
         if not updates.upserts and not updates.deletes:
             return []
 
-        res = bulk_update(bulk_update=updates, index=index, es_url=es_url)
+        res = bulk_update(bulk_update=updates, index=index, es_url=es_url, session=session)
+        if res.status_code == 413:
+            # If the request is too large, split the request in half and try again, recursively
+            upsert_half = len(updates.upserts) // 2
+            delete_half = len(updates.deletes) // 2
+            first_half = BulkUpdate(upserts=updates.upserts[:upsert_half], deletes=updates.deletes[:delete_half])
+            second_half = BulkUpdate(upserts=updates.upserts[upsert_half:], deletes=updates.deletes[delete_half:])
+            return self._bulk_update(first_half, index, es_url, session) + self._bulk_update(second_half, index, es_url, session)
+
         if res.status_code != 200:
             logger.error(f"Failed to bulk update index: {index} in elasticsearch.")
             logger.error(f"Error Message: {res.text}")
-            failure_uuids = [upsert["uuid"] for upsert in updates.upserts]
-            failure_uuids.extend(updates.deletes)
+            failure_uuids = [f"{upsert['uuid']}: Update - {res.text}" for upsert in updates.upserts]
+            failure_uuids.extend([f"{delete_uuid}: Delete - {res.text}" for delete_uuid in updates.deletes])
             return failure_uuids
 
         res_body = res.json().get("items", [])
@@ -560,7 +581,10 @@ class Translator(TranslatorInterface):
             if "update" in item or "delete" in item
         ]
 
-        failure_uuids = [item["_id"] for item in result_values if item["status"] not in [200, 201]]
+        failure_uuids = [
+            f"{item['_id']}: Update - {item.get('error', {}).get('reason')}"
+            for item in result_values if item["status"] not in [200, 201]
+        ]
         return failure_uuids
 
     # This method is supposed to only retrieve Dataset|Source|Sample
@@ -619,10 +643,33 @@ class Translator(TranslatorInterface):
         retries = Retry(
             total=3,
             backoff_factor=0.5,
-            status_forcelist=[500, 502, 503, 504],
+            status_forcelist=[429, 500, 502, 503, 504],
         )
         session.mount(self.entity_api_url, HTTPAdapter(max_retries=retries))
+
+        for index in self.index_config:
+            session.mount(index.url, HTTPAdapter(max_retries=retries))
+
         return session
+
+    def _print_to_s3(self, text: str):
+        # We must load from config file since we're not in the flask app context
+        file_dir = os.path.abspath(os.path.dirname(__file__))
+        cfg_dir = os.path.join(file_dir, "instance")
+        cfg = Config(cfg_dir)
+        if cfg.from_pyfile("app.cfg") is False:
+            raise ValueError("Failed to load app.cfg while trying to print to S3")
+
+        s3_worker = S3Worker(
+            cfg["AWS_ACCESS_KEY_ID"],
+            cfg["AWS_SECRET_ACCESS_KEY"],
+            cfg["AWS_S3_BUCKET_NAME"],
+            cfg["AWS_OBJECT_URL_EXPIRATION_IN_SECS"],
+            0,  # always meets the threshold
+            cfg["AWS_S3_OBJECT_RESULTS_PREFIX"],
+        )
+        url = s3_worker.stash_response_body_if_big(text)
+        return url
 
 
 def get_val_by_key(type_code, data, source_data_name):
