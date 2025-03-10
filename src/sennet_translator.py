@@ -19,6 +19,7 @@ from hubmap_commons.S3_worker import S3Worker
 from yaml import safe_load
 
 from libs.ontology import Ontology
+from libs.memcached_progress import MemcachedWriteProgress, create_memcached_client
 
 sys.path.append("search-adaptor/src")
 
@@ -33,6 +34,7 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.ERROR)
 
 
 @dataclass(frozen=True)
@@ -58,10 +60,11 @@ class Translator(TranslatorInterface):
     skip_comparison = False
     transformation_resources = {}  # Not used in SenNet
 
-    def __init__(self, indices, app_client_id, app_client_secret, token, ubkg_instance=None):
+    def __init__(self, config, ubkg_instance, token):
         try:
             self.indices: dict = {}
             self.self_managed_indices: dict = {}
+            indices = config["INDICES"]
             # Do not include the indexes that are self managed
             for key, value in indices["indices"].items():
                 if "reindex_enabled" in value and value["reindex_enabled"] is True:
@@ -103,8 +106,10 @@ class Translator(TranslatorInterface):
         except Exception:
             raise ValueError("Invalid indices config")
 
-        self.app_client_id = app_client_id
-        self.app_client_secret = app_client_secret
+        self.app_client_id = config["APP_CLIENT_ID"]
+        self.app_client_secret = config["APP_CLIENT_SECRET"]
+        self.memcached_server = config["MEMCACHED_SERVER"] if config["MEMCACHED_MODE"] else None
+        self.memcached_prefix = config["MEMCACHED_PREFIX"]
         self.token = token
 
         self.request_headers = self._create_request_headers_for_auth(token)
@@ -183,6 +188,7 @@ class Translator(TranslatorInterface):
 
     def translate_all(self):
         with self._new_session() as session:
+            progress_writer = None
             try:
                 logger.info("############# Reindex Live Started #############")
                 start = time.time()
@@ -262,13 +268,29 @@ class Translator(TranslatorInterface):
                 all_entities_uuids = list(all_entities_uuids)
                 n = self.bulk_update_size
                 batched_uuids = [all_entities_uuids[i:i + n] for i in range(0, len(all_entities_uuids), n)]
+
+                if self.memcached_server:
+                    client = create_memcached_client(self.memcached_server)
+                    progress_writer = MemcachedWriteProgress(client=client,
+                                                             prefix=self.memcached_prefix,
+                                                             num_entites=len(all_entities_uuids))
+                    progress_writer.reset()
+                    progress_writer.is_indexing = True
+
                 with concurrent.futures.ThreadPoolExecutor() as executor:
                     futures = []
                     for index in self.index_config:
                         for uuids in batched_uuids:
                             uuids_copy = copy.deepcopy(uuids)
                             index_copy = copy.deepcopy(index)
-                            futures.append(executor.submit(self._upsert_index, uuids_copy, index_copy, session))
+                            future = executor.submit(self._upsert_index,
+                                                     entity_ids=uuids_copy,
+                                                     index=index_copy,
+                                                     session=session,
+                                                     priv_entities=[],
+                                                     pub_entities=[],
+                                                     progress_writer=progress_writer)
+                            futures.append(future)
 
                     for f in concurrent.futures.as_completed(futures):
                         failures = f.result()
@@ -307,6 +329,10 @@ class Translator(TranslatorInterface):
 
             except Exception as e:
                 logger.error(e)
+            finally:
+                if progress_writer is not None:
+                    progress_writer.reset()
+                    progress_writer.close()
 
     def translate(self, entity_id: str):
         start = time.time()
@@ -339,7 +365,8 @@ class Translator(TranslatorInterface):
                         index=index,
                         session=session,
                         priv_entities=[priv_document],
-                        pub_entities=[pub_document] if pub_document else []
+                        pub_entities=[pub_document] if pub_document else [],
+                        progress_writer=None
                     )
                     failure_results.update(results)
 
@@ -493,7 +520,8 @@ class Translator(TranslatorInterface):
         return headers_dict
 
     def _upsert_index(self, entity_ids: list[str], index: Index, session: requests.Session,
-                      priv_entities: list[dict] = [], pub_entities: list[dict] = []):
+                      priv_entities: list[dict], pub_entities: list[dict],
+                      progress_writer: Optional[MemcachedWriteProgress] = None):
         failure_results = {
             index.private: [],
             index.public: []
@@ -539,6 +567,10 @@ class Translator(TranslatorInterface):
                 failures = self._bulk_update(pub_update, index.public, index.url, session)
                 failure_results[index.public].extend(failures)
 
+                if progress_writer:
+                    incr = max(len(priv_entities), len(pub_entities))
+                    progress_writer.add_entities_complete(incr)
+
                 priv_entities = []
                 pub_entities = []
 
@@ -551,6 +583,9 @@ class Translator(TranslatorInterface):
             pub_update = BulkUpdate(upserts=pub_entities)
             failures = self._bulk_update(pub_update, index.public, index.url, session)
             failure_results[index.public].extend(failures)
+        if progress_writer:
+            incr = max(len(priv_entities), len(pub_entities))
+            progress_writer.add_entities_complete(incr)
 
         return failure_results
 
