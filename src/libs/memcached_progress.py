@@ -1,3 +1,4 @@
+from typing import Union
 from pymemcache import serde
 from pymemcache.client.base import PooledClient
 
@@ -50,11 +51,20 @@ class MemcachedWriteProgress:
     def is_indexing(self, value: bool):
         self.client.set(f'{self.prefix}{PROGRESS_IS_INDEXING_KEY}', value, noreply=False)
 
+    @property
+    def percent_complete(self) -> Union[int, float]:
+        percent = self.client.get(f'{self.prefix}{PROGRESS_PERCENT_COMPLETE_KEY}', 0)
+        return percent
+
+    @percent_complete.setter
+    def percent_complete(self, value: Union[int, float]):
+        self.client.set(f'{self.prefix}{PROGRESS_PERCENT_COMPLETE_KEY}', value, noreply=False)
+
     def add_entities_complete(self, num_entities: int):
         if num_entities <= 0:
             return
-        percent = int(num_entities * self.percent_per_entity)
-        self.client.incr(f'{self.prefix}{PROGRESS_PERCENT_COMPLETE_KEY}', percent, noreply=False)
+        percent = num_entities * self.percent_per_entity
+        self.percent_complete += percent
 
     def reset(self):
         self.client.set(f'{self.prefix}{PROGRESS_IS_INDEXING_KEY}', False, noreply=False)

@@ -331,7 +331,8 @@ class Translator(TranslatorInterface):
                 logger.error(e)
             finally:
                 if progress_writer is not None:
-                    progress_writer.reset()
+                    progress_writer.is_indexing = False
+                    progress_writer.percent_complete = 100
                     progress_writer.close()
 
     def translate(self, entity_id: str):
