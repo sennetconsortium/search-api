@@ -1,18 +1,21 @@
 import importlib
 import os
 import sys
-from pathlib import Path
 import logging
 from flask import Flask
+from pathlib import Path
 from yaml import safe_load
 
 # Atlas Consortia commons
 from atlas_consortia_commons.ubkg import initialize_ubkg
-from atlas_consortia_commons.rest import *
+from atlas_consortia_commons.rest import get_http_exceptions_classes, abort_err_handler
 from atlas_consortia_commons.ubkg.ubkg_sdk import init_ontology
 
 sys.path.append("search-adaptor/src")
 search_adaptor_module = importlib.import_module("app", "search-adaptor/src")
+
+from libs.memcached_progress import MemcachedReadProgress, create_memcached_client
+from sennet_translator import Translator
 
 # Root logger configuration
 global logger
@@ -41,6 +44,10 @@ config['DEFAULT_ENTITY_API_URL'] = config['INDICES']['indices'][config['DEFAULT_
 config['APP_CLIENT_ID'] = app.config['APP_CLIENT_ID']
 config['APP_CLIENT_SECRET'] = app.config['APP_CLIENT_SECRET']
 
+config['MEMCACHED_MODE'] = app.config['MEMCACHED_MODE']
+config['MEMCACHED_SERVER'] = app.config['MEMCACHED_SERVER']
+config['MEMCACHED_PREFIX'] = app.config['MEMCACHED_PREFIX']
+
 config['AWS_ACCESS_KEY_ID'] = app.config['AWS_ACCESS_KEY_ID']
 config['AWS_SECRET_ACCESS_KEY'] = app.config['AWS_SECRET_ACCESS_KEY']
 config['AWS_S3_BUCKET_NAME'] = app.config['AWS_S3_BUCKET_NAME']
@@ -51,33 +58,35 @@ config['LARGE_RESPONSE_THRESHOLD'] = app.config['LARGE_RESPONSE_THRESHOLD']
 config['CONSORTIUM_ID'] = app.config['CONSORTIUM_ID']
 config['PARAM_SEARCH_RECOGNIZED_ENTITIES_BY_INDEX'] = app.config['PARAM_SEARCH_RECOGNIZED_ENTITIES_BY_INDEX']
 
-translator_module = importlib.import_module("sennet_translator")
-
-sys.path.append("libs")
-
-
-# This `app` will be imported by wsgi.py when deployed with uWSGI server
-search_api_instance = search_adaptor_module.SearchAPI(config, translator_module)
-app = search_api_instance.app
-
-####################################################################################################
-## UBKG Ontology and REST initialization
-####################################################################################################
+memcached_progress = None
+if config['MEMCACHED_MODE']:
+    memcached_client = create_memcached_client(config['MEMCACHED_SERVER'])
+    memcached_progress = MemcachedReadProgress(memcached_client, config['MEMCACHED_PREFIX'])
 
 try:
     for exception in get_http_exceptions_classes():
         app.register_error_handler(exception, abort_err_handler)
-    app.ubkg = initialize_ubkg(_config)
-    search_api_instance.ubkg_instance = app.ubkg
+    ubkg = initialize_ubkg(_config)
+    app.ubkg = ubkg
     with app.app_context():
         init_ontology()
 
     logger.info("Initialized ubkg module successfully :)")
-# Use a broad catch-all here
-except Exception:
+except Exception as e:
     msg = "Failed to initialize the ubkg module"
-    # Log the full stack trace, prepend a line with our message
-    logger.exception(msg)
+    logger.exception(f"{msg}: {e}")
+
+
+def translator_factory(token, *args, **kwargs):
+    return Translator(config=config, ubkg_instance=ubkg, token=token)
+
+
+# This `app` will be imported by wsgi.py when deployed with uWSGI server
+search_api_instance = search_adaptor_module.SearchAPI(config=config,
+                                                      translator_module=translator_factory,
+                                                      progress_interface=memcached_progress,
+                                                      ubkg_instance=ubkg)
+app = search_api_instance.app
 
 # For local standalone (non-docker) development/testing
 if __name__ == "__main__":
