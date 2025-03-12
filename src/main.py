@@ -77,7 +77,7 @@ except Exception as e:
     logger.exception(f"{msg}: {e}")
 
 
-def translator_factory(token):
+def translator_factory(token, *args, **kwargs):
     return Translator(config=config, ubkg_instance=ubkg, token=token)
 
 
