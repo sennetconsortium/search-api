@@ -16,6 +16,7 @@ search_adaptor_module = importlib.import_module("app", "search-adaptor/src")
 
 from libs.memcached_progress import MemcachedReadProgress, create_memcached_client
 from sennet_translator import Translator
+from status import create_blueprint
 
 # Root logger configuration
 global logger
@@ -81,10 +82,13 @@ def translator_factory(token, *args, **kwargs):
     return Translator(config=config, ubkg_instance=ubkg, token=token)
 
 
+status_blueprint = create_blueprint(config=config, progress_interface=memcached_progress)
+
 # This `app` will be imported by wsgi.py when deployed with uWSGI server
 search_api_instance = search_adaptor_module.SearchAPI(config=config,
                                                       translator_module=translator_factory,
                                                       progress_interface=memcached_progress,
+                                                      blueprint=status_blueprint,
                                                       ubkg_instance=ubkg)
 app = search_api_instance.app
 
