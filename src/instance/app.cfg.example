@@ -2,6 +2,12 @@
 APP_CLIENT_ID = ''
 APP_CLIENT_SECRET = ''
 
+# Set MEMCACHED_MODE to False to disable the caching for local development
+MEMCACHED_MODE = True
+MEMCACHED_SERVER = 'host:11211'
+# Change prefix based on deployment environment, default for DEV
+MEMCACHED_PREFIX = 'sn_search_dev_'
+
 # AWS credentials for access such as S3 and presigned URLs
 # https://boto3.amazonaws.com/v1/documentation/api/latest/guide/credentials.html
 AWS_ACCESS_KEY_ID = ''
