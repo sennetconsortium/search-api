@@ -11,12 +11,14 @@ from atlas_consortia_commons.ubkg import initialize_ubkg
 from atlas_consortia_commons.rest import get_http_exceptions_classes, abort_err_handler
 from atlas_consortia_commons.ubkg.ubkg_sdk import init_ontology
 
-sys.path.append("search-adaptor/src")
-search_adaptor_module = importlib.import_module("app", "search-adaptor/src")
+if "search-adaptor/src" not in sys.path:
+    sys.path.append("search-adaptor/src")
 
 from libs.memcached_progress import MemcachedReadProgress, create_memcached_client
 from sennet_translator import Translator
 from status import create_blueprint
+
+search_adaptor_module = importlib.import_module("app", "search-adaptor/src")
 
 # Root logger configuration
 global logger

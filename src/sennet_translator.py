@@ -18,10 +18,11 @@ from hubmap_commons.hm_auth import AuthHelper  # HuBMAP commons
 from hubmap_commons.S3_worker import S3Worker
 from yaml import safe_load
 
+if "search-adaptor/src" not in sys.path:
+    sys.path.append("search-adaptor/src")
+
 from libs.ontology import Ontology
 from libs.memcached_progress import MemcachedWriteProgress, create_memcached_client
-
-sys.path.append("search-adaptor/src")
 
 from indexer import Indexer
 from opensearch_helper_functions import BulkUpdate, bulk_update, get_uuids_from_es
@@ -740,6 +741,10 @@ if __name__ == "__main__":
     INDICES = safe_load(
         (Path(__file__).absolute().parent / "instance/search-config.yaml").read_text()
     )
+    app.config["INDICES"] = INDICES
+    app.config["DEFAULT_INDEX_WITHOUT_PREFIX"] = INDICES["default_index"]
+    app.config["DEFAULT_ELASTICSEARCH_URL"] = INDICES["indices"][app.config["DEFAULT_INDEX_WITHOUT_PREFIX"]]["elasticsearch"]["url"].strip("/")
+    app.config["DEFAULT_ENTITY_API_URL"] = INDICES["indices"][app.config["DEFAULT_INDEX_WITHOUT_PREFIX"]]["document_source_endpoint"].strip("/")
 
     try:
         token = sys.argv[1]
@@ -750,11 +755,9 @@ if __name__ == "__main__":
 
     # Create an instance of the indexer
     translator = Translator(
-        INDICES,
-        app.config["APP_CLIENT_ID"],
-        app.config["APP_CLIENT_SECRET"],
-        token,
-        ubkg_instance,
+        config=app.config,
+        ubkg_instance=ubkg_instance,
+        token=token
     )
 
     auth_helper = translator.init_auth_helper()
@@ -783,7 +786,7 @@ if __name__ == "__main__":
 
     translator.delete_and_recreate_indices(files=False)
     translator.delete_and_recreate_indices(files=True)
-    translator.translate_all()
+    # translator.translate_all()
 
     # Show the failed entity-api calls and the uuids
     if translator.failed_entity_api_calls:
