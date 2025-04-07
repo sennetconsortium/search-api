@@ -18,6 +18,7 @@ src/instance/search-config.yaml
 **/*.log*
 
 .idea
+.ignore
 
 *.DS_Store
 
