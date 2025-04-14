@@ -1,9 +1,4 @@
-version: "3.7"
-
 services:
-  
   search-api: 
     # Use the published image and tag from DockerHub
     image: sennet/search-api:${SEARCH_API_VERSION:?err}
-
-
