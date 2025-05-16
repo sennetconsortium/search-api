@@ -3,7 +3,6 @@
 The SenNet Search API is a thin wrapper of the Elasticsearch. It handles data indexing and reindexing into the backend Elasticsearch. It also accepts the search query and passes through to the Elasticsearch with data access security check.
 
 The API documentation is available on [SmartAPI](https://smart-api.info/ui/10ed9b5eb8ff960d4431befc591ed842)
-
 ## Working with submodule
 
 This repository relies on the [search-adaptor](https://github.com/dbmi-pitt/search-adaptor) as a submodule to function. The file `.gitmodules` contains the configuration for the URL and specific branch of the submodule that is to be used. Once you already have cloned this repository and switched to the target branch, to load the latest `search-adaptor` submodule:
@@ -242,4 +241,23 @@ cd docker
 
 The documentation for the API calls is hosted on SmartAPI.  Modifying the `search-api-spec.yaml` file and commititng the changes to github should update the API shown on SmartAPI. SmartAPI allows users to register API documents. The documentation is associated with this github account: api-developers@sennetconsortium.org.
 
+## Formatting
 
+Python code in this repository uses [black](https://black.readthedocs.io/en/stable/) for formatting. This development dependency can be installed using `pip install -r src/requirements.dev.txt`. Black provides integration for various IDEs, such as [PyCharm](https://black.readthedocs.io/en/stable/integrations/editors.html#pycharm-intellij-idea) and [VSCode](https://black.readthedocs.io/en/stable/integrations/editors.html#visual-studio-code). Black can also be used in the terminal using the following commands.
+
+```bash
+# Reformat single file (src/app.py)
+black src/app.py
+
+# Reformat multiple files (all files in src/ directory)
+black src/
+
+# Reformat single file within specific line numbers 1 through 10 (src/app.py)
+black --line-ranges=1-10 src/app.py
+
+# Check without reformatting single file (src/app.py)
+black --check src/app.py
+
+# Check without reformatting multiple files (all files in src/ directory)
+black --check src/
+```
