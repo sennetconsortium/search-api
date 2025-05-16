@@ -2,9 +2,10 @@
 
 import argparse
 import os
-from pathlib import Path
-import yaml
 import sys
+from pathlib import Path
+
+import yaml
 
 
 def _dir_path(string):
@@ -16,19 +17,19 @@ def _dir_path(string):
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Consolidate a directory into a single YAML document.')
+        description="Consolidate a directory into a single YAML document."
+    )
     parser.add_argument(
-        '--definitions', type=_dir_path,
+        "--definitions",
+        type=_dir_path,
         required=True,
-        help='Definitions directory, containing TSVs')
+        help="Definitions directory, containing TSVs",
+    )
 
     args = parser.parse_args()
     path = Path(args.definitions)
 
-    output = {
-        'fields': read_fields(path / 'fields.yaml'),
-        'enums': read_enums(path / 'enums')
-    }
+    output = {"fields": read_fields(path / "fields.yaml"), "enums": read_enums(path / "enums")}
 
     print(yaml.dump(output))
     return 0
@@ -39,15 +40,12 @@ def read_fields(path):
 
 
 def to_boolean(s):
-    '''
+    """
     >>> to_boolean('Yes')
     True
 
-    '''
-    map = {
-        'Yes': True,
-        'No': False
-    }
+    """
+    map = {"Yes": True, "No": False}
     if s in map:
         return map[s]
     return s
@@ -55,7 +53,7 @@ def to_boolean(s):
 
 def read_enums(path):
     enums = {}
-    for yaml_path in path.glob('*.yaml'):
+    for yaml_path in path.glob("*.yaml"):
         name = yaml_path.stem
         enums[name] = yaml.safe_load(yaml_path.read_text())
     return enums
