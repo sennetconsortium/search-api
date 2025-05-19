@@ -7,27 +7,27 @@ import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from requests.adapters import HTTPAdapter, Retry
 from typing import Optional
 
 import requests
 from atlas_consortia_commons.object import enum_val
 from atlas_consortia_commons.ubkg import initialize_ubkg
-from flask import Flask, Response, Config
+from flask import Config, Flask, Response
 from hubmap_commons.hm_auth import AuthHelper  # HuBMAP commons
 from hubmap_commons.S3_worker import S3Worker
+from requests.adapters import HTTPAdapter, Retry
 from yaml import safe_load
 
 if "search-adaptor/src" not in sys.path:
     sys.path.append("search-adaptor/src")
 
-from libs.ontology import Ontology
-from libs.memcached_progress import MemcachedWriteProgress, create_memcached_client
-
 from indexer import Indexer
 from opensearch_helper_functions import BulkUpdate, bulk_update, get_uuids_from_es
 from translator.tranlation_helper_functions import get_all_reindex_enabled_indice_names
 from translator.translator_interface import TranslatorInterface
+
+from libs.memcached_progress import MemcachedWriteProgress, create_memcached_client
+from libs.ontology import Ontology
 
 logging.basicConfig(
     format="[%(asctime)s] %(levelname)s in %(module)s: %(message)s",
@@ -77,7 +77,9 @@ class Translator(TranslatorInterface):
                 "default_index": self.DEFAULT_INDEX_WITHOUT_PREFIX,
                 "indices": self.indices,
             }
-            self.DEFAULT_ENTITY_API_URL = self.INDICES["indices"][self.DEFAULT_INDEX_WITHOUT_PREFIX]["document_source_endpoint"].strip("/")
+            self.DEFAULT_ENTITY_API_URL = self.INDICES["indices"][
+                self.DEFAULT_INDEX_WITHOUT_PREFIX
+            ]["document_source_endpoint"].strip("/")
 
             self.indexer = Indexer(self.indices, self.DEFAULT_INDEX_WITHOUT_PREFIX)
             self.ubkg_instance = ubkg_instance
@@ -87,7 +89,12 @@ class Translator(TranslatorInterface):
             self.entities = Ontology.ops().entities()
 
             self.index_config = [
-                Index(name=index, url=cfg["elasticsearch"]["url"], public=cfg["public"], private=cfg["private"])
+                Index(
+                    name=index,
+                    url=cfg["elasticsearch"]["url"],
+                    public=cfg["public"],
+                    private=cfg["private"],
+                )
                 for index, cfg in self.indices.items()
             ]
 
@@ -113,10 +120,14 @@ class Translator(TranslatorInterface):
         self.token = token
 
         self.request_headers = self._create_request_headers_for_auth(token)
-        self.entity_api_url = self.indices[self.DEFAULT_INDEX_WITHOUT_PREFIX]["document_source_endpoint"].strip("/")
+        self.entity_api_url = self.indices[self.DEFAULT_INDEX_WITHOUT_PREFIX][
+            "document_source_endpoint"
+        ].strip("/")
 
         # Add index_version by parsing the VERSION file
-        self.index_version = ((Path(__file__).absolute().parent.parent / "VERSION").read_text()).strip()
+        self.index_version = (
+            (Path(__file__).absolute().parent.parent / "VERSION").read_text()
+        ).strip()
 
         self.bulk_update_size = indices.get("bulk_update_size", 50)
 
@@ -145,7 +156,9 @@ class Translator(TranslatorInterface):
                     self._delete_index(public_index)
                     self._delete_index(private_index)
 
-                    index_mapping_file = self.self_managed_indices[index]["elasticsearch"]["mappings"]
+                    index_mapping_file = self.self_managed_indices[index]["elasticsearch"][
+                        "mappings"
+                    ]
 
                     # read the elasticserach specific mappings
                     index_mapping_settings = safe_load(
@@ -199,31 +212,31 @@ class Translator(TranslatorInterface):
                     session=session,
                     endpoint_base="source",
                     endpoint_suffix="entities",
-                    url_property="uuid"
+                    url_property="uuid",
                 )
                 upload_uuids_list = self._call_entity_api(
                     session=session,
                     endpoint_base="upload",
                     endpoint_suffix="entities",
-                    url_property="uuid"
+                    url_property="uuid",
                 )
                 collection_uuids_list = self._call_entity_api(
                     session=session,
                     endpoint_base="collection",
                     endpoint_suffix="entities",
-                    url_property="uuid"
+                    url_property="uuid",
                 )
                 sample_uuids_list = self._call_entity_api(
                     session=session,
                     endpoint_base="sample",
                     endpoint_suffix="entities",
-                    url_property="uuid"
+                    url_property="uuid",
                 )
                 dataset_uuids_list = self._call_entity_api(
                     session=session,
                     endpoint_base="dataset",
                     endpoint_suffix="entities",
-                    url_property="uuid"
+                    url_property="uuid",
                 )
 
                 # Merge into a big list that with no duplicates
@@ -267,13 +280,17 @@ class Translator(TranslatorInterface):
 
                 all_entities_uuids = list(all_entities_uuids)
                 n = self.bulk_update_size
-                batched_uuids = [all_entities_uuids[i:i + n] for i in range(0, len(all_entities_uuids), n)]
+                batched_uuids = [
+                    all_entities_uuids[i : i + n] for i in range(0, len(all_entities_uuids), n)
+                ]
 
                 if self.memcached_server:
                     client = create_memcached_client(self.memcached_server)
-                    progress_writer = MemcachedWriteProgress(client=client,
-                                                             prefix=self.memcached_prefix,
-                                                             num_entites=len(all_entities_uuids))
+                    progress_writer = MemcachedWriteProgress(
+                        client=client,
+                        prefix=self.memcached_prefix,
+                        num_entites=len(all_entities_uuids),
+                    )
                     progress_writer.reset()
                     progress_writer.is_indexing = True
 
@@ -283,13 +300,15 @@ class Translator(TranslatorInterface):
                         for uuids in batched_uuids:
                             uuids_copy = copy.deepcopy(uuids)
                             index_copy = copy.deepcopy(index)
-                            future = executor.submit(self._upsert_index,
-                                                     entity_ids=uuids_copy,
-                                                     index=index_copy,
-                                                     session=session,
-                                                     priv_entities=[],
-                                                     pub_entities=[],
-                                                     progress_writer=progress_writer)
+                            future = executor.submit(
+                                self._upsert_index,
+                                entity_ids=uuids_copy,
+                                index=index_copy,
+                                session=session,
+                                priv_entities=[],
+                                pub_entities=[],
+                                progress_writer=progress_writer,
+                            )
                             futures.append(future)
 
                     for f in concurrent.futures.as_completed(futures):
@@ -300,14 +319,18 @@ class Translator(TranslatorInterface):
                 end = time.time()
 
                 nl = "\n"
-                update_msg = "\n".join([
-                    f"{index}: {len(uuids)} entities failed to update{nl}{f'{nl}'.join(uuids)}"
-                    for index, uuids in failure_results.items()
-                ])
-                delete_msg = "\n".join([
-                    f"{index}: {len(uuids)} entities failed to delete{nl}{f'{nl}'.join(uuids)}"
-                    for index, uuids in delete_failure_results.items()
-                ])
+                update_msg = "\n".join(
+                    [
+                        f"{index}: {len(uuids)} entities failed to update{nl}{f'{nl}'.join(uuids)}"
+                        for index, uuids in failure_results.items()
+                    ]
+                )
+                delete_msg = "\n".join(
+                    [
+                        f"{index}: {len(uuids)} entities failed to delete{nl}{f'{nl}'.join(uuids)}"
+                        for index, uuids in delete_failure_results.items()
+                    ]
+                )
 
                 try:
                     msg = (
@@ -343,9 +366,11 @@ class Translator(TranslatorInterface):
                     session=session,
                     entity_id=entity_id,
                     endpoint_base="documents",
-                    include_token=True
+                    include_token=True,
                 )
-                logger.info(f"Start executing translate() on {priv_document['entity_type']} of uuid: {priv_document['uuid']}")
+                logger.info(
+                    f"Start executing translate() on {priv_document['entity_type']} of uuid: {priv_document['uuid']}"
+                )
 
                 pub_document = None
                 if self.is_public(priv_document):
@@ -354,7 +379,7 @@ class Translator(TranslatorInterface):
                             session=session,
                             entity_id=entity_id,
                             endpoint_base="documents",
-                            include_token=False
+                            include_token=False,
                         )
                     except Exception:
                         pass
@@ -367,17 +392,19 @@ class Translator(TranslatorInterface):
                         session=session,
                         priv_entities=[priv_document],
                         pub_entities=[pub_document] if pub_document else [],
-                        progress_writer=None
+                        progress_writer=None,
                     )
                     failure_results.update(results)
 
                 end = time.time()
 
                 nl = "\n"
-                msg = "\n".join([
-                    f"{index}: {len(uuids)} entities failed{nl}{f'{nl}'.join(uuids)}"
-                    for index, uuids in failure_results.items()
-                ])
+                msg = "\n".join(
+                    [
+                        f"{index}: {len(uuids)} entities failed{nl}{f'{nl}'.join(uuids)}"
+                        for index, uuids in failure_results.items()
+                    ]
+                )
                 logger.info(
                     "\n"
                     "============== translate() Results ==============\n"
@@ -415,7 +442,9 @@ class Translator(TranslatorInterface):
                 private_index = self.INDICES["indices"][index]["private"]
 
                 if self.is_public(document):
-                    response = self.indexer.index(entity_id, json.dumps(document), public_index, True)
+                    response = self.indexer.index(
+                        entity_id, json.dumps(document), public_index, True
+                    )
                 response += self.indexer.index(entity_id, json.dumps(document), private_index, True)
 
         return response
@@ -436,7 +465,7 @@ class Translator(TranslatorInterface):
                     # the scope was not explicitly specified.
                     continue
                 response += self.indexer.index(entity_id, json.dumps(document), target_index, False)
-                response += '. '
+                response += ". "
         else:
             public_index = self.INDICES["indices"][index]["public"]
             private_index = self.INDICES["indices"][index]["private"]
@@ -460,10 +489,14 @@ class Translator(TranslatorInterface):
         if "file_uuid" in document:
             # Confirm the Dataset to which the File entity belongs is published
             try:
-                dataset = self._call_entity_api(entity_id=document["dataset_uuid"], endpoint_base="documents")
+                dataset = self._call_entity_api(
+                    entity_id=document["dataset_uuid"], endpoint_base="documents"
+                )
                 return self.is_public(dataset)
             except Exception:
-                logger.error(f"Failed to confirm if the file's dataset is public for dataset uuid: {document['dataset_uuid']}")
+                logger.error(
+                    f"Failed to confirm if the file's dataset is public for dataset uuid: {document['dataset_uuid']}"
+                )
                 return False
 
         if document["entity_type"] in ["Dataset", "Publication"]:
@@ -483,10 +516,14 @@ class Translator(TranslatorInterface):
             # returning the value of its schema_constants.py DataVisibilityEnum.PUBLIC,
             # the Collection can be in the public index and retrieved by users who are not logged in.
             try:
-                entity_visibility = self._call_entity_api(entity_id=document["uuid"], endpoint_base="visibility")
+                entity_visibility = self._call_entity_api(
+                    entity_id=document["uuid"], endpoint_base="visibility"
+                )
                 is_public = entity_visibility == "public"
             except Exception:
-                logger.error(f"Failed to confirm if collection is public for uuid: {document['uuid']}")
+                logger.error(
+                    f"Failed to confirm if collection is public for uuid: {document['uuid']}"
+                )
                 return False
 
         elif document["entity_type"] == "Upload":
@@ -515,18 +552,23 @@ class Translator(TranslatorInterface):
 
         headers_dict = {
             # Don't forget the space between scheme and the token value
-            auth_header_name: auth_scheme + " " + token
+            auth_header_name: auth_scheme
+            + " "
+            + token
         }
 
         return headers_dict
 
-    def _upsert_index(self, entity_ids: list[str], index: Index, session: requests.Session,
-                      priv_entities: list[dict], pub_entities: list[dict],
-                      progress_writer: Optional[MemcachedWriteProgress] = None):
-        failure_results = {
-            index.private: [],
-            index.public: []
-        }
+    def _upsert_index(
+        self,
+        entity_ids: list[str],
+        index: Index,
+        session: requests.Session,
+        priv_entities: list[dict],
+        pub_entities: list[dict],
+        progress_writer: Optional[MemcachedWriteProgress] = None,
+    ):
+        failure_results = {index.private: [], index.public: []}
         for entity_id in entity_ids:
             try:
                 # Retrieve the private document
@@ -534,7 +576,7 @@ class Translator(TranslatorInterface):
                     session=session,
                     entity_id=entity_id,
                     endpoint_base="documents",
-                    include_token=True
+                    include_token=True,
                 )
                 priv_entities.append(priv_entity)
             except Exception as e:
@@ -549,7 +591,7 @@ class Translator(TranslatorInterface):
                         session=session,
                         entity_id=entity_id,
                         endpoint_base="documents",
-                        include_token=False
+                        include_token=False,
                     )
                     pub_entities.append(pub_entity)
                 except Exception as e:
@@ -590,7 +632,9 @@ class Translator(TranslatorInterface):
 
         return failure_results
 
-    def _bulk_update(self, updates: BulkUpdate, index: str, es_url: str, session: requests.Session = None):
+    def _bulk_update(
+        self, updates: BulkUpdate, index: str, es_url: str, session: requests.Session = None
+    ):
         if not updates.upserts and not updates.deletes:
             return []
 
@@ -599,15 +643,23 @@ class Translator(TranslatorInterface):
             # If the request is too large, split the request in half and try again, recursively
             upsert_half = len(updates.upserts) // 2
             delete_half = len(updates.deletes) // 2
-            first_half = BulkUpdate(upserts=updates.upserts[:upsert_half], deletes=updates.deletes[:delete_half])
-            second_half = BulkUpdate(upserts=updates.upserts[upsert_half:], deletes=updates.deletes[delete_half:])
-            return self._bulk_update(first_half, index, es_url, session) + self._bulk_update(second_half, index, es_url, session)
+            first_half = BulkUpdate(
+                upserts=updates.upserts[:upsert_half], deletes=updates.deletes[:delete_half]
+            )
+            second_half = BulkUpdate(
+                upserts=updates.upserts[upsert_half:], deletes=updates.deletes[delete_half:]
+            )
+            return self._bulk_update(first_half, index, es_url, session) + self._bulk_update(
+                second_half, index, es_url, session
+            )
 
         if res.status_code != 200:
             logger.error(f"Failed to bulk update index: {index} in elasticsearch.")
             logger.error(f"Error Message: {res.text}")
             failure_uuids = [f"{upsert['uuid']}: Update - {res.text}" for upsert in updates.upserts]
-            failure_uuids.extend([f"{delete_uuid}: Delete - {res.text}" for delete_uuid in updates.deletes])
+            failure_uuids.extend(
+                [f"{delete_uuid}: Delete - {res.text}" for delete_uuid in updates.deletes]
+            )
             return failure_uuids
 
         res_body = res.json().get("items", [])
@@ -619,18 +671,27 @@ class Translator(TranslatorInterface):
 
         failure_uuids = [
             f"{item['_id']}: Update - {item.get('error', {}).get('reason')}"
-            for item in result_values if item["status"] not in [200, 201]
+            for item in result_values
+            if item["status"] not in [200, 201]
         ]
         return failure_uuids
 
     # This method is supposed to only retrieve Dataset|Source|Sample
     # The Collection and Upload are handled by separate calls
     # The returned data can either be an entity dict or a list of uuids (when `url_property` parameter is specified)
-    def _call_entity_api(self, endpoint_base: str, entity_id: Optional[str] = None,
-                         endpoint_suffix: Optional[str] = None, url_property: Optional[str] = None,
-                         include_token: bool = True, session: Optional[requests.Session] = None):
+    def _call_entity_api(
+        self,
+        endpoint_base: str,
+        entity_id: Optional[str] = None,
+        endpoint_suffix: Optional[str] = None,
+        url_property: Optional[str] = None,
+        include_token: bool = True,
+        session: Optional[requests.Session] = None,
+    ):
 
-        logger.info(f"Start executing _call_entity_api() on endpoint_base: {endpoint_base}, uuid: {entity_id}")
+        logger.info(
+            f"Start executing _call_entity_api() on endpoint_base: {endpoint_base}, uuid: {entity_id}"
+        )
         url = f"{self.entity_api_url}/{endpoint_base}"
         if entity_id:
             url = f"{url}/{entity_id}"
@@ -647,8 +708,12 @@ class Translator(TranslatorInterface):
 
         if response.status_code != 200:
             # Log the full stack trace, prepend a line with our message
-            logger.exception(f"_call_entity_api() failed on endpoint_base: {endpoint_base}, uuid: {entity_id}")
-            logger.debug(f"======_call_entity_api() status code from entity-api: {response.status_code}======")
+            logger.exception(
+                f"_call_entity_api() failed on endpoint_base: {endpoint_base}, uuid: {entity_id}"
+            )
+            logger.debug(
+                f"======_call_entity_api() status code from entity-api: {response.status_code}======"
+            )
             logger.debug("======_call_entity_api() response text from entity-api======")
             logger.debug(response.text)
 
@@ -661,7 +726,9 @@ class Translator(TranslatorInterface):
             response.raise_for_status()
             raise requests.exceptions.RequestException(response.text)
 
-        logger.info(f"Finished executing _call_entity_api() on endpoint_base: {endpoint_base}, uuid: {entity_id}")
+        logger.info(
+            f"Finished executing _call_entity_api() on endpoint_base: {endpoint_base}, uuid: {entity_id}"
+        )
 
         # The resulting data can be an entity dict or a list (when `url_property` parameter is specified)
         # For Dataset, data manipulation is performed
@@ -729,9 +796,7 @@ if __name__ == "__main__":
     # Specify the absolute path of the instance folder and use the config file relative to the instance path
     app = Flask(
         __name__,
-        instance_path=os.path.join(
-            os.path.abspath(os.path.dirname(__file__)), "../src/instance"
-        ),
+        instance_path=os.path.join(os.path.abspath(os.path.dirname(__file__)), "../src/instance"),
         instance_relative_config=True,
     )
     app.config.from_pyfile("app.cfg")
@@ -742,8 +807,12 @@ if __name__ == "__main__":
     )
     app.config["INDICES"] = INDICES
     app.config["DEFAULT_INDEX_WITHOUT_PREFIX"] = INDICES["default_index"]
-    app.config["DEFAULT_ELASTICSEARCH_URL"] = INDICES["indices"][app.config["DEFAULT_INDEX_WITHOUT_PREFIX"]]["elasticsearch"]["url"].strip("/")
-    app.config["DEFAULT_ENTITY_API_URL"] = INDICES["indices"][app.config["DEFAULT_INDEX_WITHOUT_PREFIX"]]["document_source_endpoint"].strip("/")
+    app.config["DEFAULT_ELASTICSEARCH_URL"] = INDICES["indices"][
+        app.config["DEFAULT_INDEX_WITHOUT_PREFIX"]
+    ]["elasticsearch"]["url"].strip("/")
+    app.config["DEFAULT_ENTITY_API_URL"] = INDICES["indices"][
+        app.config["DEFAULT_INDEX_WITHOUT_PREFIX"]
+    ]["document_source_endpoint"].strip("/")
 
     try:
         token = sys.argv[1]
@@ -753,11 +822,7 @@ if __name__ == "__main__":
         sys.exit(msg)
 
     # Create an instance of the indexer
-    translator = Translator(
-        config=app.config,
-        ubkg_instance=ubkg_instance,
-        token=token
-    )
+    translator = Translator(config=app.config, ubkg_instance=ubkg_instance, token=token)
 
     auth_helper = translator.init_auth_helper()
 
@@ -797,4 +862,6 @@ if __name__ == "__main__":
         print(*translator.failed_entity_ids, sep="\n")
 
     end = time.time()
-    logger.info(f"############# Full index via script completed. Total time used: {end - start} seconds. #############")
+    logger.info(
+        f"############# Full index via script completed. Total time used: {end - start} seconds. #############"
+    )
