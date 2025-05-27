@@ -1,11 +1,11 @@
 from typing import Union
+
 from pymemcache import serde
 from pymemcache.client.base import PooledClient
-
 from translator.progress_interface import ProgressReadInterface
 
-PROGRESS_IS_INDEXING_KEY = 'is_indexing'
-PROGRESS_PERCENT_COMPLETE_KEY = 'percent_complete'
+PROGRESS_IS_INDEXING_KEY = "is_indexing"
+PROGRESS_PERCENT_COMPLETE_KEY = "percent_complete"
 
 
 def create_memcached_client(server: str) -> PooledClient:
@@ -28,11 +28,11 @@ class MemcachedReadProgress(ProgressReadInterface):
 
     @property
     def is_indexing(self) -> bool:
-        return self.client.get(f'{self.prefix}{PROGRESS_IS_INDEXING_KEY}', False)
+        return self.client.get(f"{self.prefix}{PROGRESS_IS_INDEXING_KEY}", False)
 
     @property
     def percent_complete(self) -> int:
-        percent = self.client.get(f'{self.prefix}{PROGRESS_PERCENT_COMPLETE_KEY}', 0)
+        percent = self.client.get(f"{self.prefix}{PROGRESS_PERCENT_COMPLETE_KEY}", 0)
         return int(percent)
 
 
@@ -45,20 +45,20 @@ class MemcachedWriteProgress:
 
     @property
     def is_indexing(self) -> bool:
-        return self.client.get(f'{self.prefix}{PROGRESS_IS_INDEXING_KEY}', False)
+        return self.client.get(f"{self.prefix}{PROGRESS_IS_INDEXING_KEY}", False)
 
     @is_indexing.setter
     def is_indexing(self, value: bool):
-        self.client.set(f'{self.prefix}{PROGRESS_IS_INDEXING_KEY}', value, noreply=False)
+        self.client.set(f"{self.prefix}{PROGRESS_IS_INDEXING_KEY}", value, noreply=False)
 
     @property
     def percent_complete(self) -> Union[int, float]:
-        percent = self.client.get(f'{self.prefix}{PROGRESS_PERCENT_COMPLETE_KEY}', 0)
+        percent = self.client.get(f"{self.prefix}{PROGRESS_PERCENT_COMPLETE_KEY}", 0)
         return percent
 
     @percent_complete.setter
     def percent_complete(self, value: Union[int, float]):
-        self.client.set(f'{self.prefix}{PROGRESS_PERCENT_COMPLETE_KEY}', value, noreply=False)
+        self.client.set(f"{self.prefix}{PROGRESS_PERCENT_COMPLETE_KEY}", value, noreply=False)
 
     def add_entities_complete(self, num_entities: int):
         if num_entities <= 0:
@@ -67,8 +67,8 @@ class MemcachedWriteProgress:
         self.percent_complete += percent
 
     def reset(self):
-        self.client.set(f'{self.prefix}{PROGRESS_IS_INDEXING_KEY}', False, noreply=False)
-        self.client.set(f'{self.prefix}{PROGRESS_PERCENT_COMPLETE_KEY}', 0, noreply=False)
+        self.client.set(f"{self.prefix}{PROGRESS_IS_INDEXING_KEY}", False, noreply=False)
+        self.client.set(f"{self.prefix}{PROGRESS_PERCENT_COMPLETE_KEY}", 0, noreply=False)
 
     def close(self):
         self.client.close()
