@@ -36,3 +36,6 @@ PARAM_SEARCH_RECOGNIZED_ENTITIES_BY_INDEX = {
         'files': None
     }
 }
+
+# Disk names that appear in 'Mounted on' column when 'df' is run in shell
+STATUS_DISKS = {'/': 'host disk space'}

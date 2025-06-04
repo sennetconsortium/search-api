@@ -18,5 +18,7 @@ pymemcache==4.0.0
 hubmap-commons==2.1.18
 atlas-consortia-commons==1.1.0
 
+psutil>=7.0.0,<7.1
+
 # The use of `-r` lets us specify the transitive requirements in one place
 -r search-adaptor/src/requirements.txt
