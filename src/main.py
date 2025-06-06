@@ -77,6 +77,8 @@ config["PARAM_SEARCH_RECOGNIZED_ENTITIES_BY_INDEX"] = app.config[
     "PARAM_SEARCH_RECOGNIZED_ENTITIES_BY_INDEX"
 ]
 
+config["STATUS_DISKS"] = app.config["STATUS_DISKS"]
+
 memcached_progress = None
 if config["MEMCACHED_MODE"]:
     memcached_client = create_memcached_client(config["MEMCACHED_SERVER"])
