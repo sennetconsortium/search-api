@@ -43,7 +43,7 @@ COPY . .
 COPY ./entrypoint.sh /usr/local/bin/entrypoint.sh
 
 # Update Python packages. uwsgi is installed by the base image.
-RUN pip install --upgrade pip setuptools wheel uwsgi && \
+RUN pip install --upgrade pip setuptools wheel && \
     pip install -r src/requirements.txt && \
     pip install -r src/search-adaptor/src/requirements.txt
 
