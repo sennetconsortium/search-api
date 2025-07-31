@@ -4,10 +4,21 @@ settings:
     query.default_field: 2048
 
 mappings:
-  date_detection: True
+  date_detection: False
   dynamic_templates:
     - # Handle all numeric types as float to avoid cast errors
       map_every_numeric:
         match_mapping_type: long
         mapping:
           type: float
+    # Must handle the above offending fields before this "catch all" mapping
+    # This emulates the default ES behavior, giving us a "keyword" subfield, with a "keyword" type
+    # Also copy the value of each mapped field to "all_text", which can then be queried as a single field
+    - map_every_string:
+        match_mapping_type: string
+        mapping:
+          type: text
+          copy_to: all_text
+          fields:
+            keyword:
+              type: keyword
