@@ -141,34 +141,31 @@ class Translator(TranslatorInterface):
 
         return auth_helper
 
-    def delete_and_recreate_indices(self, files: bool = False):
+    def delete_and_recreate_indices(self, specific_index=None):
         try:
             logger.info("Start executing delete_and_recreate_indices()")
             public_index = None
             private_index = None
 
             # Delete and recreate target indices
-            if files:
-                for index in self.self_managed_indices.keys():
-                    public_index = self.self_managed_indices[index]["public"]
-                    private_index = self.self_managed_indices[index]["private"]
+            if specific_index:
+                public_index = self.INDICES["indices"][specific_index]["public"]
+                private_index = self.INDICES["indices"][specific_index]["private"]
 
-                    self._delete_index(public_index)
-                    self._delete_index(private_index)
+                self._delete_index(public_index)
+                self._delete_index(private_index)
 
-                    index_mapping_file = self.self_managed_indices[index]["elasticsearch"][
-                        "mappings"
-                    ]
+                index_mapping_file = self.INDICES["indices"][specific_index]["elasticsearch"]["mappings"]
 
-                    # read the elasticserach specific mappings
-                    index_mapping_settings = safe_load(
-                        (Path(__file__).absolute().parent / index_mapping_file).read_text()
-                    )
+                # read the elasticserach specific mappings
+                index_mapping_settings = safe_load(
+                    (Path(__file__).absolute().parent / index_mapping_file).read_text()
+                )
 
-                    self.indexer.create_index(public_index, index_mapping_settings)
-                    self.indexer.create_index(private_index, index_mapping_settings)
+                self.indexer.create_index(public_index, index_mapping_settings)
+                self.indexer.create_index(private_index, index_mapping_settings)
 
-                    logger.info("Finished executing delete_and_recreate_indices()")
+                logger.info("Finished executing delete_and_recreate_indices()")
 
             else:
                 for index in self.indices.keys():
@@ -848,8 +845,8 @@ if __name__ == "__main__":
     start = time.time()
     logger.info("############# Full index via script started #############")
 
-    translator.delete_and_recreate_indices(files=False)
-    translator.delete_and_recreate_indices(files=True)
+    translator.delete_and_recreate_indices(specific_index=None)
+    translator.delete_and_recreate_indices(specific_index='files')
     # translator.translate_all()
 
     # Show the failed entity-api calls and the uuids
