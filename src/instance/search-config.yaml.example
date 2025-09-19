@@ -30,7 +30,6 @@ indices:
   logs-file-downloads:
     active: true
     reindex_enabled: false
-    public: file_downloads
     private: file_downloads
     elasticsearch:
       url: <ES URL>
@@ -38,7 +37,6 @@ indices:
   logs-api-usage:
     active: true
     reindex_enabled: false
-    public: api_usage
     private: api_usage
     elasticsearch:
       url: <ES URL>
@@ -46,7 +44,6 @@ indices:
   logs-github-analytics:
     active: true
     reindex_enabled: false
-    public: github_analytics
     private: github_analytics
     elasticsearch:
       url: <ES URL>
