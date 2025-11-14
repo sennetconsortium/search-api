@@ -78,6 +78,7 @@ config["PARAM_SEARCH_RECOGNIZED_ENTITIES_BY_INDEX"] = app.config[
 ]
 
 config["STATUS_DISKS"] = app.config["STATUS_DISKS"]
+config["DEBUG_MODE"] = app.config["DEBUG_MODE"]
 
 memcached_progress = None
 if config["MEMCACHED_MODE"]:

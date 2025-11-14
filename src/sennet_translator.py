@@ -155,7 +155,9 @@ class Translator(TranslatorInterface):
                 self._delete_index(public_index)
                 self._delete_index(private_index)
 
-                index_mapping_file = self.INDICES["indices"][specific_index]["elasticsearch"]["mappings"]
+                index_mapping_file = self.INDICES["indices"][specific_index]["elasticsearch"][
+                    "mappings"
+                ]
 
                 # read the elasticserach specific mappings
                 index_mapping_settings = safe_load(
@@ -846,7 +848,7 @@ if __name__ == "__main__":
     logger.info("############# Full index via script started #############")
 
     translator.delete_and_recreate_indices(specific_index=None)
-    translator.delete_and_recreate_indices(specific_index='files')
+    translator.delete_and_recreate_indices(specific_index="files")
     # translator.translate_all()
 
     # Show the failed entity-api calls and the uuids
