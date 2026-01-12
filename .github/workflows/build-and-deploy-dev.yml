@@ -18,10 +18,10 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Create SEARCH_API_VERSION
+      - name: Create $SEARCH_API_VERSION
         run: |
           export SEARCH_API_VERSION=$(tr -d "\n\r" < ../VERSION | xargs)
-          echo "SEARCH_API_VERSION=SEARCH_API_VERSION" >> $GITHUB_ENV
+          echo "SEARCH_API_VERSION=$SEARCH_API_VERSION" >> $GITHUB_ENV
         working-directory: ./docker
 
       - name: Make build script executable
@@ -37,7 +37,7 @@ jobs:
 
       - name: Tag the Docker Image
         # Alternatively we could use ${{ github.sha }} instead of latest
-        run: docker image tag sennet/search-api:SEARCH_API_VERSION sennet/search-api-dev:latest
+        run: docker image tag sennet/search-api:$SEARCH_API_VERSION sennet/search-api-dev:latest
         working-directory: ./docker
 
       - name: Push the Docker image
