@@ -108,7 +108,7 @@ else
 
         docker compose -f docker-compose.yml -f docker-compose.development.yml -p search-api build
     elif [ "$1" = "start" ]; then
-        docker compose -f docker-compose.yml -f docker-compose.development.yml -p search-api up -d
+        docker compose -f docker-compose.yml -f docker-compose.deployment.dev.yml -p search-api up -d
     elif [ "$1" = "stop" ]; then
         docker compose -f docker-compose.yml -f docker-compose.development.yml -p search-api stop
     elif [ "$1" = "down" ]; then

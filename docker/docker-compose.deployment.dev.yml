@@ -1,0 +1,4 @@
+services:
+  search-api:
+    # Use the published image and tag from DockerHub
+    image: sennet/search-api-dev:latest
