@@ -48,3 +48,11 @@ indices:
     elasticsearch:
       url: <ES URL>
       mappings: "sennet_translation/file-default-config.yaml"
+  cell-types:
+    active: true
+    reindex_enabled: true
+    public: sn_dev_cell_types
+    private: sn_dev_cell_types
+    elasticsearch:
+      url: <ES URL>
+      mappings: "sennet_translation/cell-types-default-config.yaml"
