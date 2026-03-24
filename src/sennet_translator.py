@@ -562,7 +562,7 @@ class Translator(TranslatorInterface):
                         f"property, treat as not public, verify and set the status."
                     )
 
-            elif document['entity_type'] in ['Collection', 'Epicollection']:
+            elif document["entity_type"] in ["Collection", "Epicollection"]:
                 # If this Collection meets entity-api"s criteria for visibility to the world by
                 # returning the value of its schema_constants.py DataVisibilityEnum.PUBLIC,
                 # the Collection can be in the public index and retrieved by users who are not
@@ -835,10 +835,10 @@ class Translator(TranslatorInterface):
                         logger.exception(e)
                         pass
 
-            if priv_updater.errored_ids:
-                failure_results[index.private].extend(priv_updater.errored_ids)
-            if pub_updater.errored_ids:
-                failure_results[index.public].extend(pub_updater.errored_ids)
+        if priv_updater.errored_ids:
+            failure_results[index.private].extend(priv_updater.errored_ids)
+        if pub_updater.errored_ids:
+            failure_results[index.public].extend(pub_updater.errored_ids)
 
         return failure_results
 
