@@ -137,7 +137,7 @@ class Translator(TranslatorInterface):
             (Path(__file__).absolute().parent.parent / "VERSION").read_text()
         ).strip()
 
-        self.bulk_update_size = indices.get("bulk_update_size", 50)
+        self.bulk_update_size = indices.get("bulk_update_size", 100)
 
     # Public methods
 
@@ -836,6 +836,9 @@ class Translator(TranslatorInterface):
                         failure_results[index.public].append(f"{entity_uuid}: Update - {str(e)}")
                         logger.exception(e)
                         pass
+
+        if progress_writer is not None:
+            progress_writer.add_entities_complete(len(entity_uuids))
 
         if priv_updater.errored_ids:
             failure_results[index.private].extend(priv_updater.errored_ids)
