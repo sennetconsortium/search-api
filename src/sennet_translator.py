@@ -14,7 +14,8 @@ from pathlib import Path
 from typing import Any, Optional
 
 from atlas_consortia_commons.object import enum_val
-from flask import Config
+from atlas_consortia_commons.ubkg import initialize_ubkg
+from flask import Config, Flask, Response
 from hubmap_commons.hm_auth import AuthHelper
 from hubmap_commons.S3_worker import S3Worker
 from indexer import Indexer
@@ -979,3 +980,82 @@ class Translator(TranslatorInterface):
                 scope_list = ["public", "private"]
 
         return scope_list
+
+
+# This approach is different from the live reindex via HTTP request
+# It'll delete all the existing indices and recreate then then index everything
+if __name__ == "__main__":
+    # Specify the absolute path of the instance folder and use the config file relative to the
+    # instance path
+    app = Flask(
+        __name__,
+        instance_path=os.path.join(os.path.abspath(os.path.dirname(__file__)), "../src/instance"),
+        instance_relative_config=True,
+    )
+    app.config.from_pyfile("app.cfg")
+    ubkg_instance = initialize_ubkg(app.config)
+
+    INDICES = safe_load(
+        (Path(__file__).absolute().parent / "instance/search-config.yaml").read_text()
+    )
+    app.config["INDICES"] = INDICES
+    app.config["DEFAULT_INDEX_WITHOUT_PREFIX"] = INDICES["default_index"]
+    app.config["DEFAULT_ELASTICSEARCH_URL"] = INDICES["indices"][
+        app.config["DEFAULT_INDEX_WITHOUT_PREFIX"]
+    ]["elasticsearch"]["url"].strip("/")
+    app.config["DEFAULT_ENTITY_API_URL"] = INDICES["indices"][
+        app.config["DEFAULT_INDEX_WITHOUT_PREFIX"]
+    ]["document_source_endpoint"].strip("/")
+
+    try:
+        token = sys.argv[1]
+    except IndexError:
+        msg = "Missing admin group token argument"
+        logger.exception(msg)
+        sys.exit(msg)
+
+    # Create an instance of the indexer
+    translator = Translator(config=app.config, ubkg_instance=ubkg_instance, token=token)
+
+    auth_helper = translator.init_auth_helper()
+
+    # The second argument indicates to get the groups information
+    user_info_dict = auth_helper.getUserInfo(token, True)
+
+    if isinstance(user_info_dict, Response):
+        msg = "The given token is expired or invalid"
+        # Log the full stack trace, prepend a line with our message
+        logger.exception(msg)
+        sys.exit(msg)
+
+    # Use the new key rather than the 'hmgroupids' which will be deprecated
+    group_ids = user_info_dict["group_membership_ids"]
+
+    # Ensure the user belongs to the Globus Data Admin group
+    if not auth_helper.has_data_admin_privs(token):
+        msg = "The given token doesn't belong to the Globus Data Admin group, access not granted"
+        # Log the full stack trace, prepend a line with our message
+        logger.exception(msg)
+        sys.exit(msg)
+
+    start = time.time()
+    logger.info("############# Full index via script started #############")
+
+    translator.delete_and_recreate_indices(specific_index=None)
+    translator.delete_and_recreate_indices(specific_index="files")
+    # translator.translate_all()
+
+    # Show the failed entity-api calls and the uuids
+    if translator.failed_entity_api_calls:
+        logger.info(f"{len(translator.failed_entity_api_calls)} entity-api calls failed")
+        print(*translator.failed_entity_api_calls, sep="\n")
+
+    if translator.failed_entity_ids:
+        logger.info(f"{len(translator.failed_entity_ids)} entity ids failed")
+        print(*translator.failed_entity_ids, sep="\n")
+
+    end = time.time()
+    logger.info(
+        f"############# Full index via script completed. Total time used: {end - start} "
+        f"seconds. #############"
+    )
