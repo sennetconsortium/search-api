@@ -24,6 +24,8 @@ src/instance/search-config.yaml
 
 **/__pycache__/
 
+notes.*
+
 # Docker copied files and directories
 docker/search-api/src
 docker/search-api/VERSION

@@ -40,3 +40,5 @@ PARAM_SEARCH_RECOGNIZED_ENTITIES_BY_INDEX = {
 # Disk names that appear in 'Mounted on' column when 'df' is run in shell
 STATUS_DISKS = {'/': 'host disk space'}
 DEBUG_MODE = False
+
+config["JOB_QUEUE_MODE"] = False
