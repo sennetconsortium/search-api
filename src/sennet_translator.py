@@ -827,7 +827,8 @@ class Translator(TranslatorInterface):
 
                         elif publish_sha256s.get(entity_uuid) == actual_sha256:
                             logger.info(
-                                f"Entity {entity_uuid} has not changed, skipping update in public ES"
+                                f"Entity {entity_uuid} has not changed, skipping update in "
+                                f"public ES"
                             )
                             pass
 
