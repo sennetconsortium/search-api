@@ -778,23 +778,15 @@ class Translator(TranslatorInterface):
                     actual_sha256 = self._calculate_doc_sha256_hash(priv_entity)
 
                     if private_sha256s.get(entity_uuid) is None:
-                        logger.info(f"Entity {entity_uuid} is new, adding to private ES")
                         # entity does not exist in ES,
                         priv_entity["doc_sha256"] = actual_sha256
                         priv_updater.add_update(doc_id=entity_uuid, doc=priv_entity, upsert=True)
 
                     elif private_sha256s.get(entity_uuid) != actual_sha256:
-                        logger.info(f"Entity {entity_uuid} has changed, updating in private ES")
                         # entity exists but has changed, update it in ES
                         priv_entity["doc_sha256"] = actual_sha256
                         priv_updater.add_delete(doc_id=entity_uuid)
                         priv_updater.add_update(doc_id=entity_uuid, doc=priv_entity, upsert=True)
-
-                    elif private_sha256s.get(entity_uuid) == actual_sha256:
-                        logger.info(
-                            f"Entity {entity_uuid} has not changed, skipping update in private ES"
-                        )
-                        pass
 
                 except Exception as e:
                     failure_results[index.private].append(f"{entity_uuid}: Update - {str(e)}")
@@ -814,23 +806,14 @@ class Translator(TranslatorInterface):
 
                         if publish_sha256s.get(entity_uuid) is None:
                             # entity does not exist in ES, insert it into ES
-                            logger.info(f"Entity {entity_uuid} is new, adding to public ES")
                             pub_entity["doc_sha256"] = actual_sha256
                             pub_updater.add_update(doc_id=entity_uuid, doc=pub_entity, upsert=True)
 
                         elif publish_sha256s.get(entity_uuid) != actual_sha256:
                             # entity exists but has changed, delete and insert it in ES
-                            logger.info(f"Entity {entity_uuid} has changed, updating in public ES")
                             pub_entity["doc_sha256"] = actual_sha256
                             pub_updater.add_delete(doc_id=entity_uuid)
                             pub_updater.add_update(doc_id=entity_uuid, doc=pub_entity, upsert=True)
-
-                        elif publish_sha256s.get(entity_uuid) == actual_sha256:
-                            logger.info(
-                                f"Entity {entity_uuid} has not changed, skipping update in "
-                                f"public ES"
-                            )
-                            pass
 
                     except Exception as e:
                         failure_results[index.public].append(f"{entity_uuid}: Update - {str(e)}")

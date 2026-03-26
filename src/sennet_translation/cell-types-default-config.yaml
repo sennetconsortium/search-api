@@ -2,3 +2,12 @@ settings:
   index:
     mapping.total_fields.limit: 3500
     query.default_field: 2048
+
+mappings:
+  date_detection: False
+  dynamic_templates:
+    # Handle all numeric types as float to avoid cast errors
+    - map_every_numeric:
+        match_mapping_type: long
+        mapping:
+          type: float
