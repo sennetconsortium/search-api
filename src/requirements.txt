@@ -18,5 +18,7 @@ atlas-consortia-commons==1.1.4
 
 psutil>=7.0.0,<7.1
 
+mysql-connector-python==9.6.0
+
 # The use of `-r` lets us specify the transitive requirements in one place
 -r search-adaptor/src/requirements.txt
