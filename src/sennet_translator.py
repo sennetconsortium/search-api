@@ -18,22 +18,22 @@ from atlas_consortia_commons.ubkg import initialize_ubkg
 from flask import Config, Flask, Response
 from hubmap_commons.hm_auth import AuthHelper
 from hubmap_commons.S3_worker import S3Worker
-from indexer import Indexer
 from requests import RequestException, Session
 from requests.adapters import HTTPAdapter
 from urllib3 import Retry
 from yaml import safe_load
 
-from es_updater import ESBulkUpdater
-from libs.memcached_progress import MemcachedWriteProgress, create_memcached_client
-from libs.ontology import Ontology
-
 if "search-adaptor/src" not in sys.path:
     sys.path.append("search-adaptor/src")
 
+from indexer import Indexer
 from opensearch_helper_functions import BulkUpdate
 from translator.tranlation_helper_functions import get_all_reindex_enabled_indice_names
 from translator.translator_interface import TranslatorInterface
+
+from libs.elasticsearch import ESBulkUpdater, get_docs_from_es
+from libs.memcached_progress import MemcachedWriteProgress, create_memcached_client
+from libs.ontology import Ontology
 
 logging.basicConfig(
     format="[%(asctime)s] %(levelname)s in %(module)s: %(message)s",
@@ -278,7 +278,7 @@ class Translator(TranslatorInterface):
                         es_url = self.INDICES["indices"][index]["elasticsearch"]["url"].strip("/")
 
                         for actual_index in all_indices:
-                            u = self._get_docs_from_es(
+                            u = get_docs_from_es(
                                 index=actual_index,
                                 es_url=es_url,
                                 fields=["uuid"],
@@ -673,61 +673,6 @@ class Translator(TranslatorInterface):
         # If result is a list or not a Dataset dict, no change - 7/13/2022 Max & Zhou
         return res.json()
 
-    def _get_docs_from_es(
-        self,
-        index: str,
-        es_url: str,
-        fields: list[str],
-        session: Session,
-        query: Optional[dict] = None,
-    ):
-        scroll = "1m"  # save scroll context for 1 minute
-        size = 10000
-        docs = []
-
-        # initial search with scroll and get id
-        search_url = f"{es_url}/{index}/_search?scroll={scroll}"
-        body = {
-            "_source": fields,
-            "size": size,
-        }
-        if query:
-            body["query"] = query
-        res = session.post(
-            search_url,
-            json=body,
-            timeout=TIMEOUT,
-        )
-        res.raise_for_status()
-        data = res.json()
-        scroll_id = data["_scroll_id"]
-        hits = data["hits"]["hits"]
-        docs.extend(
-            {"_id": hit["_id"], **{field: hit["_source"].get(field) for field in fields}}
-            for hit in hits
-        )
-
-        # scroll until no more hits
-        while hits:
-            scroll_resp = session.post(
-                f"{es_url}/_search/scroll",
-                json={"scroll": scroll, "scroll_id": scroll_id},
-                timeout=TIMEOUT,
-            )
-            scroll_resp.raise_for_status()
-            scroll_data = scroll_resp.json()
-            hits = scroll_data["hits"]["hits"]
-            if not hits:
-                break
-            docs.extend(
-                {"_id": hit["_id"], **{field: hit["_source"].get(field) for field in fields}}
-                for hit in hits
-            )
-            scroll_id = scroll_data["_scroll_id"]
-            time.sleep(1)
-
-        return docs
-
     def _upsert_index(
         self,
         entity_uuids: list[str],
@@ -743,7 +688,7 @@ class Translator(TranslatorInterface):
             # get doc_sha256s
             private_sha256s = {
                 doc["uuid"]: doc["doc_sha256"]
-                for doc in self._get_docs_from_es(
+                for doc in get_docs_from_es(
                     index=index.private,
                     es_url=index.url,
                     fields=["uuid", "doc_sha256"],
@@ -755,7 +700,7 @@ class Translator(TranslatorInterface):
 
             publish_sha256s = {
                 doc["uuid"]: doc["doc_sha256"]
-                for doc in self._get_docs_from_es(
+                for doc in get_docs_from_es(
                     index=index.public,
                     es_url=index.url,
                     fields=["uuid", "doc_sha256"],
@@ -1028,8 +973,9 @@ if __name__ == "__main__":
     start = time.time()
     logger.info("############# Full index via script started #############")
 
-    translator.delete_and_recreate_indices(specific_index=None)
-    translator.delete_and_recreate_indices(specific_index="files")
+    # translator.delete_and_recreate_indices(specific_index=None)
+    # translator.delete_and_recreate_indices(specific_index="files")
+    translator.delete_and_recreate_indices(specific_index="senotypes")
     # translator.translate_all()
 
     # Show the failed entity-api calls and the uuids
