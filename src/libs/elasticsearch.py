@@ -1,8 +1,67 @@
 import json
 import threading
+import time
 from typing import Dict, List, Optional
 
 from requests import Session
+
+TIMEOUT = 20
+
+
+def get_docs_from_es(
+    index: str,
+    es_url: str,
+    fields: list[str],
+    session: Session,
+    query: Optional[dict] = None,
+):
+    scroll = "1m"  # save scroll context for 1 minute
+    size = 10000
+    docs = []
+
+    # initial search with scroll and get id
+    search_url = f"{es_url}/{index}/_search?scroll={scroll}"
+    body = {
+        "_source": fields,
+        "size": size,
+    }
+    if query:
+        body["query"] = query
+
+    res = session.post(
+        search_url,
+        json=body,
+        timeout=TIMEOUT,
+    )
+    res.raise_for_status()
+    data = res.json()
+    scroll_id = data["_scroll_id"]
+    hits = data["hits"]["hits"]
+    docs.extend(
+        {"_id": hit["_id"], **{field: hit["_source"].get(field) for field in fields}}
+        for hit in hits
+    )
+
+    # scroll until no more hits
+    while hits:
+        scroll_resp = session.post(
+            f"{es_url}/_search/scroll",
+            json={"scroll": scroll, "scroll_id": scroll_id},
+            timeout=TIMEOUT,
+        )
+        scroll_resp.raise_for_status()
+        scroll_data = scroll_resp.json()
+        hits = scroll_data["hits"]["hits"]
+        if not hits:
+            break
+        docs.extend(
+            {"_id": hit["_id"], **{field: hit["_source"].get(field) for field in fields}}
+            for hit in hits
+        )
+        scroll_id = scroll_data["_scroll_id"]
+        time.sleep(1)
+
+    return docs
 
 
 class ESBulkUpdater:
