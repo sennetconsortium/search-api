@@ -41,4 +41,9 @@ PARAM_SEARCH_RECOGNIZED_ENTITIES_BY_INDEX = {
 STATUS_DISKS = {'/': 'host disk space'}
 DEBUG_MODE = False
 
-config["JOB_QUEUE_MODE"] = False
+JOB_QUEUE_MODE = False
+
+MYSQL_HOST = 'http://database_host:3306'
+MYSQL_DATABASE = 'database_name'
+MYSQL_USER = 'database_user'
+MYSQL_PASSWORD = 'database_password'
