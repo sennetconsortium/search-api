@@ -127,7 +127,7 @@ class ESBulkUpdater:
         """
         action = {"create": {"_id": doc_id}}
         action_line = json.dumps(action, separators=(",", ":"))
-        doc_line = json.dumps({"doc": doc}, separators=(",", ":"))
+        doc_line = json.dumps(doc, separators=(",", ":"))
         with self._lock:
             self._payload_lines.append(action_line)
             self._payload_lines.append(doc_line)
@@ -150,7 +150,7 @@ class ESBulkUpdater:
             for doc_id, doc in docs.items():
                 action = {"create": {"_id": doc_id}}
                 action_line = json.dumps(action, separators=(",", ":"))
-                doc_line = json.dumps({"doc": doc}, separators=(",", ":"))
+                doc_line = json.dumps(doc, separators=(",", ":"))
                 self._payload_lines.append(action_line)
                 self._payload_lines.append(doc_line)
                 self._payload_bytes += (
