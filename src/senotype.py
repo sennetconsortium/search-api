@@ -68,7 +68,7 @@ def reindex_all_senotypes():
             db_pool=current_app.config["db_pool"],
         )
 
-    return {"message": "Request of reindex all senotypes accepted"}, 201
+    return {"message": "Request of reindex all senotypes accepted"}, 202
 
 
 def _reindex_senotypes_thread(senotypes_config: dict, db_pool: MySQLConnectionPool):
