@@ -1,9 +1,5 @@
-import datetime
-import decimal
-import hashlib
 import json
 import logging
-import math
 import os
 import sys
 import time
@@ -11,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
 from atlas_consortia_commons.object import enum_val
 from atlas_consortia_commons.ubkg import initialize_ubkg
@@ -19,15 +15,15 @@ from flask import Config, Flask, Response
 from hubmap_commons.hm_auth import AuthHelper
 from hubmap_commons.S3_worker import S3Worker
 from requests import RequestException, Session
-from requests.adapters import HTTPAdapter
-from urllib3 import Retry
 from yaml import safe_load
+
+from libs.hash import calculate_sha256_hash
+from libs.http import new_session
 
 if "search-adaptor/src" not in sys.path:
     sys.path.append("search-adaptor/src")
 
 from indexer import Indexer
-from opensearch_helper_functions import BulkUpdate
 from translator.tranlation_helper_functions import get_all_reindex_enabled_indice_names
 from translator.translator_interface import TranslatorInterface
 
@@ -605,18 +601,9 @@ class Translator(TranslatorInterface):
     # Private methods
 
     def _new_session(self):
-        session = Session()
-        retries = Retry(
-            total=3,
-            backoff_factor=0.5,
-            status_forcelist=[429, 500, 502, 503, 504],
-        )
-        session.mount(self.entity_api_url, HTTPAdapter(max_retries=retries))
-
-        for index in self.index_config:
-            session.mount(index.url, HTTPAdapter(max_retries=retries))
-
-        return session
+        prefixes = [self.entity_api_url.rstrip("/")]
+        prefixes.extend([index.url.rstrip("/") for index in self.index_config])
+        return new_session(prefixes)
 
     def _call_entity_api(
         self,
@@ -720,7 +707,7 @@ class Translator(TranslatorInterface):
                         include_token=True,
                         session=session,
                     )
-                    actual_sha256 = self._calculate_doc_sha256_hash(priv_entity)
+                    actual_sha256 = calculate_sha256_hash(priv_entity)
 
                     if private_sha256s.get(entity_uuid) is None:
                         # entity does not exist in ES,
@@ -747,7 +734,7 @@ class Translator(TranslatorInterface):
                             include_token=False,
                             session=session,
                         )
-                        actual_sha256 = self._calculate_doc_sha256_hash(pub_entity)
+                        actual_sha256 = calculate_sha256_hash(pub_entity)
 
                         if publish_sha256s.get(entity_uuid) is None:
                             # entity does not exist in ES, insert it into ES
@@ -775,61 +762,6 @@ class Translator(TranslatorInterface):
 
         return failure_results
 
-    def _calculate_doc_sha256_hash(self, doc: Any) -> str:
-        norm_obj = self._normalized_obj(doc)
-        norm_json = json.dumps(norm_obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
-        return hashlib.sha256(norm_json.encode("utf-8")).hexdigest()
-
-    def _normalized_obj(self, obj: Any) -> Any:
-        if isinstance(obj, dict):
-            return {str(k): self._normalized_obj(v) for k, v in obj.items()}
-
-        if isinstance(obj, (list, tuple)):
-            items = [self._normalized_obj(v) for v in obj]
-            try:
-                items.sort(
-                    key=lambda x: json.dumps(
-                        x, sort_keys=True, separators=(",", ":"), ensure_ascii=False
-                    )
-                )
-            except Exception:
-                # fallback to original order if something goes wrong
-                pass
-            return items
-
-        if isinstance(obj, set):
-            items = [self._normalized_obj(v) for v in obj]
-            items.sort(
-                key=lambda x: json.dumps(
-                    x, sort_keys=True, separators=(",", ":"), ensure_ascii=False
-                )
-            )
-            return items
-
-        if isinstance(obj, bytes):
-            return obj.hex()
-
-        if isinstance(obj, decimal.Decimal):
-            return str(obj)
-
-        if isinstance(obj, datetime.datetime):
-            return obj.isoformat()
-
-        if isinstance(obj, datetime.date):
-            return obj.isoformat()
-
-        if obj is None or isinstance(obj, (str, int, float, bool)):
-            if isinstance(obj, float):
-                if math.isnan(obj) or math.isinf(obj):
-                    return str(obj)
-
-            return obj
-
-        if hasattr(obj, "__dict__"):
-            return self._normalized_obj(obj.__dict__)
-
-        return str(obj)
-
     def _print_to_s3(self, text: str):
         # We must load from config file since we're not in the flask app context
         file_dir = os.path.abspath(os.path.dirname(__file__))
@@ -848,26 +780,6 @@ class Translator(TranslatorInterface):
         )
         url = s3_worker.stash_response_body_if_big(text)
         return url
-
-    def _bulk_update_es(self, bulk_update: BulkUpdate, index: str, es_url: str, session: Session):
-        if not bulk_update.upserts and not bulk_update.deletes:
-            raise ValueError("No upserts or deletes provided.")
-
-        url = f"{es_url}/{index}/_bulk"
-        headers = {"Content-Type": "application/x-ndjson"}
-
-        # Preparing ndjson content
-        upserts = [
-            f'{{"update":{{"_id":"{upsert["uuid"]}"}}}}\n{{"doc":{json.dumps(upsert, separators=(",", ":"))},"doc_as_upsert":true}}'
-            for upsert in bulk_update.upserts
-        ]
-        deletes = [
-            f'{{ "delete": {{ "_id": "{delete_uuid}" }} }}' for delete_uuid in bulk_update.deletes
-        ]
-
-        body = "\n".join(deletes + upserts) + "\n"
-
-        return session.post(url, headers=headers, data=body, timeout=TIMEOUT)
 
     def __get_scope_list(
         self,
