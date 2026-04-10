@@ -121,6 +121,7 @@ def translator_factory(token, *args, **kwargs):
 # This `app` will be imported by wsgi.py when deployed with uWSGI server
 search_api_instance = search_adaptor_module.SearchAPI(
     config=config,
+    blueprint=status_blueprint,  # this overrides the SearchAPI status endpoint
     translator_module=translator_factory,
     progress_interface=memcached_progress,
     ubkg_instance=ubkg,
@@ -128,11 +129,10 @@ search_api_instance = search_adaptor_module.SearchAPI(
 app = search_api_instance.app
 
 app.url_map.converters["sennet_id"] = SenNetIDConverter
-app.config["db_pool"] = mysql_pool
-app.config["progress_interface"] = memcached_progress
-app.config["search_config"] = config["INDICES"]
-app.config["ubkg"] = ubkg
-app.register_blueprint(status_blueprint)
+app.config["DB_POOL"] = mysql_pool
+app.config["PROGRESS_INTERFACE"] = memcached_progress
+app.config["SEARCH_CONFIG"] = config["INDICES"]
+app.config["ENTITY_API_URL"] = config["DEFAULT_ENTITY_API_URL"]
 app.register_blueprint(senotypes_blueprint)
 
 # For local standalone (non-docker) development/testing
