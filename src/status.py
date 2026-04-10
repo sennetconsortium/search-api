@@ -88,12 +88,13 @@ def get_status():
     status_data["services"].append(service)
 
     # check the memcached connection
-    if current_app.progress_interface:
+    progress_interface = current_app.config.get("PROGRESS_INTERFACE")
+    if progress_interface:
         try:
             service = {"name": "memcached", "status": True}
             index_process = {
-                "is_indexing": current_app.progress_interface.is_indexing,
-                "percent_complete": current_app.progress_interface.percent_complete,
+                "is_indexing": progress_interface.is_indexing,
+                "percent_complete": progress_interface.percent_complete,
             }
         except Exception as e:
             service["status"] = False
