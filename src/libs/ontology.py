@@ -1,6 +1,5 @@
 import os
 import sqlite3
-from logging import getLogger
 from time import sleep
 
 from atlas_consortia_commons.ubkg.ubkg_sdk import UbkgSDK
@@ -17,7 +16,8 @@ class GeneManager:
     def __init__(self, ubkg_url: str):
         self._session = new_session(ubkg_url)
         self._genes_url = f"{ubkg_url}/genes"
-        self._logger = getLogger(__name__)
+
+        # set up local cache database
         db_path = os.path.join(os.path.dirname(__file__), "..", "instance", "gene_cache.db")
         self._db = sqlite3.connect(db_path, check_same_thread=False)
         self._db.execute("PRAGMA journal_mode=WAL")
@@ -28,7 +28,6 @@ class GeneManager:
         # check cache
         row = self._db.execute("SELECT name FROM genes WHERE gene_id = ?", (gene_id,)).fetchone()
         if row:
-            self._logger.debug(f"Cache hit for gene_id {gene_id}")
             return {"id": gene_id, "name": row[0]}
 
         ubkg_gene_id = self._get_gene_id(gene_id)
@@ -64,8 +63,6 @@ class GeneManager:
             result[gene_id] = {"id": gene_id, "name": name}
             cached_ids.add(gene_id)
 
-        self._logger.debug(f"Cache hit for {len(cached_ids)}/{len(unique_ids)} gene_ids")
-
         missing = [gene_id for gene_id in unique_ids if gene_id not in cached_ids]
 
         # split missing gene ids into batches to fetch from ubkg
@@ -89,6 +86,8 @@ class GeneManager:
                     original_id = ubkg_to_original[ubkg_id]
                     result[original_id] = {"id": original_id, "name": gene_name}
                     inserts.append((original_id, gene_name))
+
+            # update cache in bulk if needed
             if inserts:
                 self._db.executemany(
                     "INSERT OR REPLACE INTO genes (gene_id, name) VALUES (?, ?)", inserts
