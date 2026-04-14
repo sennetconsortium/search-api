@@ -83,6 +83,7 @@ config["PARAM_SEARCH_RECOGNIZED_ENTITIES_BY_INDEX"] = app.config[
 
 config["STATUS_DISKS"] = app.config["STATUS_DISKS"]
 config["DEBUG_MODE"] = app.config["DEBUG_MODE"]
+config["UBKG_SERVER"] = app.config["UBKG_SERVER"]
 
 # MySQL connection pool configuration, store the pool in app context for global access
 mysql_pool = MySQLConnectionPool(
@@ -133,6 +134,7 @@ app.config["DB_POOL"] = mysql_pool
 app.config["PROGRESS_INTERFACE"] = memcached_progress
 app.config["SEARCH_CONFIG"] = config["INDICES"]
 app.config["ENTITY_API_URL"] = config["DEFAULT_ENTITY_API_URL"]
+app.config["UBKG_SERVER"] = config["UBKG_SERVER"]
 app.register_blueprint(senotypes_blueprint)
 
 # For local standalone (non-docker) development/testing

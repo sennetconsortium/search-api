@@ -12,6 +12,7 @@ from requests import Session
 from libs.elasticsearch import ESBulkUpdater, get_docs_from_es
 from libs.hash import calculate_sha256_hash
 from libs.http import new_session
+from libs.ontology import GeneManager
 
 logger = logging.getLogger()
 
@@ -52,8 +53,9 @@ def reindex_senotype(id: str):
 
     entity_api_url = current_app.config["ENTITY_API_URL"]
     es_url = senotypes_config["elasticsearch"]["url"]
+    ubkg_url = current_app.config["UBKG_SERVER"].rstrip("/")
 
-    with new_session([entity_api_url, es_url]) as session:
+    with new_session([entity_api_url, es_url]) as session, GeneManager(ubkg_url) as gene_manager:
         try:
             doc = _build_doc(
                 id=senotypeid,
@@ -61,7 +63,9 @@ def reindex_senotype(id: str):
                 session=session,
                 entity_api_url=entity_api_url,
                 token=token,
+                gene_manager=gene_manager,
             )
+
         except Exception as e:
             logger.exception(f"Failed to build doc for senotype {senotypeid}: {e}")
             return rest_server_err(f"Failed to build doc for senotype {senotypeid}")
@@ -95,13 +99,25 @@ def reindex_all_senotypes():
     future = background_executor.submit(
         _reindex_senotypes_thread,
         senotypes_config=senotypes_config,
-        entity_api_url=current_app.config["ENTITY_API_URL"],
+        entity_api_url=current_app.config["ENTITY_API_URL"].rstrip("/"),
+        ubkg_url=current_app.config["UBKG_SERVER"].rstrip("/"),
         token=token,
         db_pool=current_app.config["DB_POOL"],
     )
     future.add_done_callback(_log_reindex_all_result)
 
     return {"message": "Request of reindex all senotypes accepted"}, 202
+
+
+@senotypes_blueprint.route("/senotypes/cache", methods=["DELETE"])
+def delete_senotype_cache():
+    try:
+        with GeneManager(current_app.config["UBKG_SERVER"].rstrip("/")) as gene_manager:
+            gene_manager.clear_cache()
+        return {"message": "Gene cache cleared successfully"}, 200
+    except Exception as e:
+        logger.exception(f"Failed to clear gene cache: {e}")
+        return rest_server_err("Failed to clear gene cache")
 
 
 @senotypes_blueprint.before_request
@@ -121,6 +137,7 @@ def close_db(error):
 def _reindex_senotypes_thread(
     senotypes_config: dict,
     entity_api_url: str,
+    ubkg_url: str,
     token: str,
     db_pool: MySQLConnectionPool,
 ):
@@ -139,7 +156,7 @@ def _reindex_senotypes_thread(
 
     es_url = senotypes_config["elasticsearch"]["url"]
 
-    with new_session([entity_api_url, es_url]) as session:
+    with new_session([entity_api_url, es_url]) as session, GeneManager(ubkg_url) as gene_manager:
         senotypeids = [row["senotypeid"] for row in rows]
         try:
             private_sha256s = {
@@ -176,6 +193,7 @@ def _reindex_senotypes_thread(
                         session=session,
                         entity_api_url=entity_api_url,
                         token=token,
+                        gene_manager=gene_manager,
                     )
                     actual_sha256 = calculate_sha256_hash(doc)
                     if private_sha256s.get(senotypeid) is None:
@@ -209,6 +227,7 @@ def _build_doc(
     session: Session,
     entity_api_url: str,
     token: str,
+    gene_manager: GeneManager,
 ) -> dict[str, Any]:
     data = json.loads(row)
     doc: dict[str, Any] = {"sennet_id": id}
@@ -263,6 +282,8 @@ def _build_doc(
                     doc[field_name] = context
 
         elif predicate_term == "has_dataset":
+            hgnc_codes = [obj["code"] for obj in objs if obj.get("code", "").startswith("HGNC:")]
+            gene_names = gene_manager.get_genes(hgnc_codes) if hgnc_codes else {}
             items = []
             for obj in objs:
                 item: dict[str, Any] = {k: obj[k] for k in ("code", "term") if k in obj}
@@ -276,15 +297,24 @@ def _build_doc(
                     )
                     item["uuid"] = entity["uuid"]
                     sleep(0.2)
+                    if code in gene_names:
+                        item["name"] = gene_names[code]["name"]
                 if item:
                     items.append(item)
             if items:
                 doc["has_dataset"] = items
 
         else:
-            items = [
-                item for obj in objs if (item := {k: obj[k] for k in ("code", "term") if k in obj})
-            ]
+            hgnc_codes = [obj["code"] for obj in objs if obj.get("code", "").startswith("HGNC:")]
+            gene_names = gene_manager.get_genes(hgnc_codes) if hgnc_codes else {}
+            items = []
+            for obj in objs:
+                item = {k: obj[k] for k in ("code", "term") if k in obj}
+                code = obj.get("code")
+                if code and code in gene_names:
+                    item["name"] = gene_names[code]["name"]
+                if item:
+                    items.append(item)
             if items:
                 doc[predicate_term] = items
 
