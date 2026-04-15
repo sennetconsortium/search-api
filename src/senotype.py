@@ -234,6 +234,8 @@ def _build_doc(
 
     senotype = data.get("senotype", {})
 
+    if uuid := senotype.get("uuid"):
+        doc["uuid"] = uuid
     if title := senotype.get("name"):
         doc["title"] = title
     if definition := senotype.get("definition"):
