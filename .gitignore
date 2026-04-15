@@ -34,5 +34,9 @@ docker/search-api/BUILD
 # Portal cache
 src/sennet_translation/addl_index_transformations/portal/cache/*.jsonld
 
+# UBKG cache
+src/instance/*.db
+src/instance/*.db*
+
 # Virtual Environment
 venv

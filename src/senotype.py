@@ -2,6 +2,7 @@ import json
 import logging
 from concurrent.futures import ThreadPoolExecutor
 from time import sleep
+from typing import Any
 
 from atlas_consortia_commons.rest import rest_not_found, rest_server_err
 from flask import Blueprint, current_app, g, request
@@ -11,6 +12,7 @@ from requests import Session
 from libs.elasticsearch import ESBulkUpdater, get_docs_from_es
 from libs.hash import calculate_sha256_hash
 from libs.http import new_session
+from libs.ontology import GeneManager
 
 logger = logging.getLogger()
 
@@ -39,12 +41,11 @@ def reindex_senotype(id: str):
     if row is None:
         return rest_not_found(f"Senotype with id {id} not found")
 
-    id = row["senotypeid"]
-    payload = row["senotypejson"]
-    if not id or not payload or not isinstance(payload, str):
-        logger.warning(f"Invalid data for senotype with id {id}: {row}")
-        return rest_server_err(f"Invalid data for senotype with id {id}")
-    payload = json.loads(payload)
+    senotypeid = row["senotypeid"]
+    senotypejson = row["senotypejson"]
+    if not senotypeid or not senotypejson or not isinstance(senotypejson, str):
+        logger.warning(f"Invalid data for senotype with id {senotypeid}: {row}")
+        return rest_server_err(f"Invalid data for senotype with id {senotypeid}")
 
     token = request.authorization.token if request.authorization else None
     if not token:
@@ -52,32 +53,34 @@ def reindex_senotype(id: str):
 
     entity_api_url = current_app.config["ENTITY_API_URL"]
     es_url = senotypes_config["elasticsearch"]["url"]
+    ubkg_url = current_app.config["UBKG_SERVER"].rstrip("/")
 
-    with new_session([entity_api_url, es_url]) as session:
-        # process dataset assertions to add dataset uuids
-        for assertion in payload.get("assertions", []):
-            if assertion.get("predicate", {}).get("term") == "has_dataset":
-                try:
-                    assertion["objects"] = get_dataset_objects(
-                        assertion=assertion,
-                        entity_api_url=entity_api_url,
-                        token=token,
-                        session=session,
-                    )
-                except Exception as e:
-                    logger.exception(f"Failed to process dataset assertion for senotype {id}: {e}")
-                    continue
+    with new_session([entity_api_url, es_url]) as session, GeneManager(ubkg_url) as gene_manager:
+        try:
+            doc = _build_doc(
+                id=senotypeid,
+                row=senotypejson,
+                session=session,
+                entity_api_url=entity_api_url,
+                token=token,
+                gene_manager=gene_manager,
+            )
+
+        except Exception as e:
+            logger.exception(f"Failed to build doc for senotype {senotypeid}: {e}")
+            return rest_server_err(f"Failed to build doc for senotype {senotypeid}")
 
         with ESBulkUpdater(
             es_url=senotypes_config["elasticsearch"]["url"],
             index=senotypes_config["private"],
+            session=session,
         ) as priv_updater:
-            actual_sha256 = calculate_sha256_hash(payload)
-            payload["doc_sha256"] = actual_sha256
-            priv_updater.add_delete(doc_id=id)
-            priv_updater.add_update(doc_id=id, doc=payload, upsert=True)
+            actual_sha256 = calculate_sha256_hash(doc)
+            doc["doc_sha256"] = actual_sha256
+            priv_updater.add_delete(doc_id=senotypeid)
+            priv_updater.add_update(doc_id=senotypeid, doc=doc, upsert=True)
 
-    return {"message": f"Senotype with id {id} reindexed successfully"}, 200
+    return {"message": f"Senotype with id {senotypeid} reindexed successfully"}, 200
 
 
 # Auth handled in gateway
@@ -96,7 +99,8 @@ def reindex_all_senotypes():
     future = background_executor.submit(
         _reindex_senotypes_thread,
         senotypes_config=senotypes_config,
-        entity_api_url=current_app.config["ENTITY_API_URL"],
+        entity_api_url=current_app.config["ENTITY_API_URL"].rstrip("/"),
+        ubkg_url=current_app.config["UBKG_SERVER"].rstrip("/"),
         token=token,
         db_pool=current_app.config["DB_POOL"],
     )
@@ -105,16 +109,35 @@ def reindex_all_senotypes():
     return {"message": "Request of reindex all senotypes accepted"}, 202
 
 
-def _log_reindex_all_result(future):
+@senotypes_blueprint.route("/senotypes/cache", methods=["DELETE"])
+def delete_senotype_cache():
     try:
-        future.result()
-    except Exception:
-        logger.exception("Background reindex-all senotypes task failed")
+        with GeneManager(current_app.config["UBKG_SERVER"].rstrip("/")) as gene_manager:
+            gene_manager.clear_cache()
+        return {"message": "Gene cache cleared successfully"}, 200
+    except Exception as e:
+        logger.exception(f"Failed to clear gene cache: {e}")
+        return rest_server_err("Failed to clear gene cache")
+
+
+@senotypes_blueprint.before_request
+def open_db():
+    """Open a new database connection before each request for this blueprint."""
+    g.db = current_app.config["DB_POOL"].get_connection()
+
+
+@senotypes_blueprint.teardown_request
+def close_db(error):
+    """Return the connection to the pool after each request for this blueprint."""
+    db = g.pop("db", None)
+    if db is not None:
+        db.close()
 
 
 def _reindex_senotypes_thread(
     senotypes_config: dict,
     entity_api_url: str,
+    ubkg_url: str,
     token: str,
     db_pool: MySQLConnectionPool,
 ):
@@ -131,8 +154,10 @@ def _reindex_senotypes_thread(
         if "connection" in locals() and connection is not None:
             connection.close()
 
-    ids = [row["senotypeid"] for row in rows]
-    with new_session(senotypes_config["elasticsearch"]["url"]) as session:
+    es_url = senotypes_config["elasticsearch"]["url"]
+
+    with new_session([entity_api_url, es_url]) as session, GeneManager(ubkg_url) as gene_manager:
+        senotypeids = [row["senotypeid"] for row in rows]
         try:
             private_sha256s = {
                 doc["_id"]: doc["doc_sha256"]
@@ -141,7 +166,7 @@ def _reindex_senotypes_thread(
                     es_url=senotypes_config["elasticsearch"]["url"],
                     fields=["doc_sha256"],
                     session=session,
-                    query={"terms": {"_id": ids}},
+                    query={"terms": {"_id": senotypeids}},
                 )
                 if "doc_sha256" in doc
             }
@@ -156,87 +181,148 @@ def _reindex_senotypes_thread(
         ) as priv_updater:
             for row in rows:
                 try:
-                    id = row["senotypeid"]
-                    payload = row["senotypejson"]
-                    if not id or not payload or not isinstance(payload, str):
+                    senotypeid = row["senotypeid"]
+                    senotypejson = row["senotypejson"]
+                    if not senotypeid or not senotypejson or not isinstance(senotypejson, str):
                         logger.warning(f"Skipping row with missing id or payload: {row}")
                         continue
-                    payload = json.loads(payload)
 
-                    # process dataset assertions to add dataset uuids
-                    for assertion in payload.get("assertions", []):
-                        if assertion.get("predicate", {}).get("term") == "has_dataset":
-                            try:
-                                assertion["objects"] = get_dataset_objects(
-                                    assertion=assertion,
-                                    entity_api_url=entity_api_url,
-                                    token=token,
-                                    session=session,
-                                )
-                            except Exception as e:
-                                logger.exception(
-                                    f"Failed to process dataset assertion for senotype {id}: {e}"
-                                )
-                                continue
-
-                    actual_sha256 = calculate_sha256_hash(payload)
-
-                    if private_sha256s.get(id) is None:
+                    doc = _build_doc(
+                        id=senotypeid,
+                        row=senotypejson,
+                        session=session,
+                        entity_api_url=entity_api_url,
+                        token=token,
+                        gene_manager=gene_manager,
+                    )
+                    actual_sha256 = calculate_sha256_hash(doc)
+                    if private_sha256s.get(senotypeid) is None:
                         # doc doesn't exist in ES, create it
-                        payload["doc_sha256"] = actual_sha256
-                        priv_updater.add_update(doc_id=id, doc=payload, upsert=True)
-                    elif private_sha256s[id] != actual_sha256:
+                        doc["doc_sha256"] = actual_sha256
+                        priv_updater.add_update(doc_id=senotypeid, doc=doc, upsert=True)
+                    elif private_sha256s[senotypeid] != actual_sha256:
                         # doc exists but has changed, update it in ES
-                        payload["doc_sha256"] = actual_sha256
-                        priv_updater.add_delete(doc_id=id)
-                        priv_updater.add_update(doc_id=id, doc=payload, upsert=True)
+                        doc["doc_sha256"] = actual_sha256
+                        priv_updater.add_delete(doc_id=senotypeid)
+                        priv_updater.add_update(doc_id=senotypeid, doc=doc, upsert=True)
+
                 except Exception as e:
                     logger.exception(
                         f"Failed to process senotype with id {row.get('senotypeid')}: {e}"
                     )
-                    continue
 
         logger.info("Finished reindexing senotypes")
 
 
-def get_dataset_objects(assertion: dict, entity_api_url: str, token: str, session: Session):
-    objs = assertion.get("objects", [])
-    for obj in objs:
-        code = obj.get("code")
-        if code:
-            try:
-                entity = get_entity(
-                    entity_api_url=entity_api_url,
-                    entity_id=code,
-                    token=token,
-                    session=session,
-                )
-                obj["uuid"] = entity["uuid"]
-            except Exception as e:
-                logger.exception(f"Failed to retrieve entity for code {code}: {e}")
-                continue
-            finally:
-                sleep(0.2)
-
-    return objs
+def _log_reindex_all_result(future):
+    try:
+        future.result()
+    except Exception:
+        logger.exception("Background reindex-all senotypes task failed")
 
 
-def get_entity(entity_api_url: str, entity_id: str, token: str, session: Session):
+def _build_doc(
+    id: str,
+    row: str,
+    session: Session,
+    entity_api_url: str,
+    token: str,
+    gene_manager: GeneManager,
+) -> dict[str, Any]:
+    data = json.loads(row)
+    doc: dict[str, Any] = {"sennet_id": id}
+
+    senotype = data.get("senotype", {})
+
+    if title := senotype.get("name"):
+        doc["title"] = title
+    if definition := senotype.get("definition"):
+        doc["definition"] = definition
+    if doi := senotype.get("doi"):
+        doc["doi"] = doi
+
+    if provenance := senotype.get("provenance"):
+        doc_provenance = {}
+        if successor := provenance.get("successor"):
+            doc_provenance["successor"] = successor
+        if predecessor := provenance.get("predecessor"):
+            doc_provenance["predecessor"] = predecessor
+        if doc_provenance:
+            doc["provenance"] = doc_provenance
+
+    submitter = data.get("submitter", {})
+    if name := submitter.get("name"):
+        full_name = (name.get("first", "") + " " + name.get("last", "")).strip()
+        if full_name:
+            doc["created_by_user_displayname"] = full_name
+    if email := submitter.get("email"):
+        doc["created_by_user_email"] = email
+
+    for assertion in data.get("assertions", []):
+        predicate_term = assertion.get("predicate", {}).get("term")
+        if not predicate_term:
+            continue
+
+        objs = assertion.get("objects", [])
+
+        if predicate_term == "has_sex":
+            values = [obj.get("term") for obj in objs if obj.get("term")]
+            if values:
+                doc["sex"] = values
+
+        elif predicate_term == "has_context":
+            # Each object's term field is the measurement name (age, bmi)
+            for obj in objs:
+                field_name = obj.get("term")
+                if not field_name:
+                    continue
+                keys = ("unit", "value", "lowerbound", "upperbound")
+                context = {k: obj[k] for k in keys if k in obj}
+                if context:
+                    doc[field_name] = context
+
+        elif predicate_term == "has_dataset":
+            hgnc_codes = [obj["code"] for obj in objs if obj.get("code", "").startswith("HGNC:")]
+            gene_names = gene_manager.get_genes(hgnc_codes) if hgnc_codes else {}
+            items = []
+            for obj in objs:
+                item: dict[str, Any] = {k: obj[k] for k in ("code", "term") if k in obj}
+                code = obj.get("code")
+                if code:
+                    entity = _get_entity(
+                        entity_api_url=entity_api_url,
+                        entity_id=code,
+                        token=token,
+                        session=session,
+                    )
+                    item["uuid"] = entity["uuid"]
+                    sleep(0.2)
+                    if code in gene_names:
+                        item["name"] = gene_names[code]["name"]
+                if item:
+                    items.append(item)
+            if items:
+                doc["has_dataset"] = items
+
+        else:
+            hgnc_codes = [obj["code"] for obj in objs if obj.get("code", "").startswith("HGNC:")]
+            gene_names = gene_manager.get_genes(hgnc_codes) if hgnc_codes else {}
+            items = []
+            for obj in objs:
+                item = {k: obj[k] for k in ("code", "term") if k in obj}
+                code = obj.get("code")
+                if code and code in gene_names:
+                    item["name"] = gene_names[code]["name"]
+                if item:
+                    items.append(item)
+            if items:
+                doc[predicate_term] = items
+
+    return doc
+
+
+def _get_entity(entity_api_url: str, entity_id: str, token: str, session: Session):
     headers = {"Authorization": f"Bearer {token}"}
     res = session.get(f"{entity_api_url}/entities/{entity_id}", headers=headers)
     res.raise_for_status()
     return res.json()
-
-
-@senotypes_blueprint.before_request
-def open_db():
-    """Open a new database connection before each request for this blueprint."""
-    g.db = current_app.config["DB_POOL"].get_connection()
-
-
-@senotypes_blueprint.teardown_request
-def close_db(error):
-    """Return the connection to the pool after each request for this blueprint."""
-    db = g.pop("db", None)
-    if db is not None:
-        db.close()
