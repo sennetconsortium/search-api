@@ -4,7 +4,6 @@ import os
 import sys
 from pathlib import Path
 
-from atlas_consortia_commons.converter import SenNetIDConverter
 from atlas_consortia_commons.rest import abort_err_handler, get_http_exceptions_classes
 
 # Atlas Consortia commons
@@ -18,8 +17,8 @@ if "search-adaptor/src" not in sys.path:
     sys.path.append("search-adaptor/src")
 
 from libs.memcached_progress import MemcachedReadProgress, create_memcached_client
+from search_api import SenNetSearchAPI
 from sennet_translator import Translator
-from senotype import senotypes_blueprint
 from status import status_blueprint
 
 search_adaptor_module = importlib.import_module("app", "search-adaptor/src")
@@ -84,6 +83,9 @@ config["PARAM_SEARCH_RECOGNIZED_ENTITIES_BY_INDEX"] = app.config[
 config["STATUS_DISKS"] = app.config["STATUS_DISKS"]
 config["DEBUG_MODE"] = app.config["DEBUG_MODE"]
 config["UBKG_SERVER"] = app.config["UBKG_SERVER"]
+config["SENOTYPE_EDIT_GROUP_UUID"] = app.config["SENOTYPE_EDIT_GROUP_UUID"]
+config["SEARCH_CONFIG"] = config["INDICES"]
+config["ENTITY_API_URL"] = config["DEFAULT_ENTITY_API_URL"]
 
 # MySQL connection pool configuration, store the pool in app context for global access
 mysql_pool = MySQLConnectionPool(
@@ -96,11 +98,13 @@ mysql_pool = MySQLConnectionPool(
     database=app.config["MYSQL_DATABASE"],
     autocommit=True,
 )
+config["DB_POOL"] = mysql_pool
 
 memcached_progress = None
 if config["MEMCACHED_MODE"]:
     memcached_client = create_memcached_client(config["MEMCACHED_SERVER"])
     memcached_progress = MemcachedReadProgress(memcached_client, config["MEMCACHED_PREFIX"])
+config["PROGRESS_INTERFACE"] = memcached_progress
 
 try:
     for exception in get_http_exceptions_classes():
@@ -120,7 +124,7 @@ def translator_factory(token, *args, **kwargs):
 
 
 # This `app` will be imported by wsgi.py when deployed with uWSGI server
-search_api_instance = search_adaptor_module.SearchAPI(
+search_api_instance = SenNetSearchAPI(
     config=config,
     blueprint=status_blueprint,  # this overrides the SearchAPI status endpoint
     translator_module=translator_factory,
@@ -129,14 +133,6 @@ search_api_instance = search_adaptor_module.SearchAPI(
 )
 app = search_api_instance.app
 
-app.url_map.converters["sennet_id"] = SenNetIDConverter
-app.config["DB_POOL"] = mysql_pool
-app.config["PROGRESS_INTERFACE"] = memcached_progress
-app.config["SEARCH_CONFIG"] = config["INDICES"]
-app.config["ENTITY_API_URL"] = config["DEFAULT_ENTITY_API_URL"]
-app.config["UBKG_SERVER"] = config["UBKG_SERVER"]
-app.register_blueprint(senotypes_blueprint)
-
 # For local standalone (non-docker) development/testing
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port="5005")
+    app.run(host="0.0.0.0", port=5005)
