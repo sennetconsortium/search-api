@@ -56,3 +56,11 @@ indices:
     elasticsearch:
       url: <ES URL>
       mappings: "sennet_translation/cell-types-default-config.yaml"
+    senotypes:
+    active: true
+    reindex_enabled: false
+    public: sn_dev_public_senotypes
+    private: sn_dev_consortium_senotypes
+    elasticsearch:
+      url: <ES URL>
+      mappings: "sennet_translation/senotypes-default-config.yaml"

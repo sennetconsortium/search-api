@@ -47,3 +47,5 @@ MYSQL_HOST = 'http://database_host:3306'
 MYSQL_DATABASE = 'database_name'
 MYSQL_USER = 'database_user'
 MYSQL_PASSWORD = 'database_password'
+
+SENOTYPE_EDIT_GROUP_UUID = 'abcd-1234-efgh-5678-ijkl9012mnop'

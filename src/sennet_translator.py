@@ -17,9 +17,6 @@ from hubmap_commons.S3_worker import S3Worker
 from requests import RequestException, Session
 from yaml import safe_load
 
-from libs.hash import calculate_sha256_hash
-from libs.http import new_session
-
 if "search-adaptor/src" not in sys.path:
     sys.path.append("search-adaptor/src")
 
@@ -28,6 +25,8 @@ from translator.tranlation_helper_functions import get_all_reindex_enabled_indic
 from translator.translator_interface import TranslatorInterface
 
 from libs.elasticsearch import ESBulkUpdater, get_docs_from_es
+from libs.hash import calculate_sha256_hash
+from libs.http import new_session
 from libs.memcached_progress import MemcachedWriteProgress, create_memcached_client
 from libs.ontology import Ontology
 
