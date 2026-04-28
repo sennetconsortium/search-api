@@ -389,8 +389,22 @@ class Translator(TranslatorInterface):
 
     def translate(self, entity_id: str):
         start = time.time()
+
+        try:
+            with self._new_session() as session:
+                entity = self._call_entity_api(
+                    endpoint_base="entities",
+                    entity_id=entity_id,
+                    include_token=True,
+                    session=session,
+                )
+        except RequestException as e:
+            logger.error(f"Failed to retrieve entity with id {entity_id} from entity-api: {e}")
+            return
+
+        entity_uuid = entity["uuid"]
         for index in self.index_config:
-            failure_results = self._upsert_index(entity_uuids=[entity_id], index=index)
+            failure_results = self._upsert_index(entity_uuids=[entity_uuid], index=index)
             nl = "\n"
             update_msg = "\n".join(
                 [
