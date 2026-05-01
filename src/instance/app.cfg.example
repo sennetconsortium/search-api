@@ -48,4 +48,10 @@ MYSQL_DATABASE = 'database_name'
 MYSQL_USER = 'database_user'
 MYSQL_PASSWORD = 'database_password'
 
+# MongoDB connection for test
+MONGO_HOST = 'http://database_host:27017'
+MONGO_DB_NAME = 'database_name'
+MONGO_USERNAME = 'database_user'
+MONGO_PASSWORD = 'database_password'
+
 SENOTYPE_EDIT_GROUP_UUID = 'abcd-1234-efgh-5678-ijkl9012mnop'

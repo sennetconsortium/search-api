@@ -7,6 +7,7 @@ from typing import Any
 from atlas_consortia_commons.rest import rest_not_found, rest_server_err
 from flask import Blueprint, current_app, g, request
 from mysql.connector.pooling import MySQLConnectionPool
+from pymongo.collection import Collection
 from requests import Session
 
 from libs.elasticsearch import ESBulkUpdater, get_docs_from_es
@@ -25,7 +26,116 @@ background_executor = ThreadPoolExecutor(max_workers=2)
 
 
 # Auth handled in gateway
-@senotypes_blueprint.route("/senotypes/reindex/<sennet_id:id>", methods=["PUT"])
+@senotypes_blueprint.route("/senotypes/reindex/test/<string:id>", methods=["PUT"])
+def reindex_test_senotype(id: str):
+    # check that the senotypes index configuration exists before proceeding
+    search_config = current_app.config["SEARCH_CONFIG"]
+    senotypes_config = search_config.get("indices", {}).get("senotypes-test")
+    if not senotypes_config:
+        return rest_server_err("Senotypes test index configuration not found")
+
+    try:
+        collection = current_app.config["MONGO_DB"]["senotypes"]
+        doc = collection.find_one({"uuid": id}, {"_id": 0})
+        if not doc:
+            return rest_not_found(f"Senotype with uuid {id} not found")
+    except Exception as e:
+        logger.exception(f"Failed to retrieve senotype with uuid {id} from MongoDB: {e}")
+        return rest_server_err(f"Failed to retrieve senotype with uuid {id}")
+
+    try:
+        es_url = senotypes_config["elasticsearch"]["url"]
+        priv_index = senotypes_config["private"]
+        with ESBulkUpdater(es_url=es_url, index=priv_index) as priv_updater:
+            actual_sha256 = calculate_sha256_hash(doc)
+            doc["doc_sha256"] = actual_sha256
+            priv_updater.add_delete(doc_id=doc["uuid"])
+            priv_updater.add_update(doc_id=doc["uuid"], doc=doc, upsert=True)
+    except Exception as e:
+        logger.exception(f"Failed to index senotype with uuid {id} into Elasticsearch: {e}")
+        return rest_server_err(f"Failed to index senotype with uuid {id} into Elasticsearch")
+
+    return {"message": f"Senotype with id {id} reindexed successfully"}, 200
+
+
+# Auth handled in gateway
+@senotypes_blueprint.route("/senotypes/reindex-all/test", methods=["PUT"])
+def reindex_all_test_senotypes():
+    # check that the senotypes index configuration exists before proceeding
+    search_config = current_app.config["SEARCH_CONFIG"]
+    senotypes_config = search_config.get("indices", {}).get("senotypes-test")
+    if not senotypes_config:
+        return rest_server_err("Senotypes test index configuration not found")
+
+    token = request.authorization.token if request.authorization else None
+    if not token:
+        return rest_server_err("Authorization token is required")
+
+    future = background_executor.submit(
+        _reindex_test_senotypes_thread,
+        senotypes_config=senotypes_config,
+        collection=current_app.config["MONGO_DB"]["senotypes"],
+    )
+    future.add_done_callback(_log_reindex_all_result)
+
+    return {"message": "Request of reindex all senotypes accepted"}, 202
+
+
+def _reindex_test_senotypes_thread(senotypes_config: dict, collection: Collection):
+    try:
+        items = [item for item in collection.find({}, {"_id": 0})]
+    except Exception as e:
+        logger.exception(f"Failed to retrieve senotypes from MongoDB: {e}")
+        return
+
+    es_url = senotypes_config["elasticsearch"]["url"]
+    priv_index = senotypes_config["private"]
+
+    with new_session(es_url) as session:
+        try:
+            uuids = [item["uuid"] for item in items]
+            private_sha256s = {
+                doc["_id"]: doc["doc_sha256"]
+                for doc in get_docs_from_es(
+                    index=priv_index,
+                    es_url=senotypes_config["elasticsearch"]["url"],
+                    fields=["doc_sha256"],
+                    session=session,
+                    query={"terms": {"_id": uuids}},
+                )
+                if "doc_sha256" in doc
+            }
+        except Exception as e:
+            logger.exception(f"Failed to retrieve existing senotypes data from Elasticsearch: {e}")
+            return
+
+        try:
+            with ESBulkUpdater(es_url=es_url, index=priv_index, session=session) as priv_updater:
+                for item in items:
+                    try:
+                        actual_sha256 = calculate_sha256_hash(item)
+                        if private_sha256s.get(item["uuid"]) is None:
+                            # doc doesn't exist in ES, create it
+                            item["doc_sha256"] = actual_sha256
+                            priv_updater.add_update(doc_id=item["uuid"], doc=item, upsert=True)
+                        elif private_sha256s[item["uuid"]] != actual_sha256:
+                            # doc exists but has changed, update it in ES
+                            item["doc_sha256"] = actual_sha256
+                            priv_updater.add_delete(doc_id=item["uuid"])
+                            priv_updater.add_update(doc_id=item["uuid"], doc=item, upsert=True)
+
+                    except Exception as e:
+                        logger.exception(f"Failed to index senotype with uuid {item['uuid']}: {e}")
+
+        except Exception as e:
+            logger.exception(f"Failed to index senotypes into Elasticsearch: {e}")
+            return
+
+    logger.info("Finished reindexing senotypes")
+
+
+# Auth handled in gateway
+@senotypes_blueprint.route("/senotypes/reindex/<string:id>", methods=["PUT"])
 def reindex_senotype(id: str):
     # check that the senotypes index configuration exists before proceeding
     search_config = current_app.config["SEARCH_CONFIG"]
