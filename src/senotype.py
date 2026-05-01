@@ -55,7 +55,7 @@ def reindex_test_senotype(id: str):
         logger.exception(f"Failed to index senotype with uuid {id} into Elasticsearch: {e}")
         return rest_server_err(f"Failed to index senotype with uuid {id} into Elasticsearch")
 
-    return {"message": f"Senotype with id {id} reindexed successfully"}, 200
+    return {"message": f"Senotype with uuid {doc["uuid"]} reindexed successfully"}, 200
 
 
 # Auth handled in gateway
