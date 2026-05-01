@@ -4,7 +4,6 @@ if "search-adaptor/src" not in sys.path:
     sys.path.append("search-adaptor/src")
 
 from app import SearchAPI
-from atlas_consortia_commons.converter import SenNetIDConverter
 from opensearch_helper_functions import unauthorized_error
 
 from senotype import senotypes_blueprint
@@ -23,8 +22,6 @@ class SenNetSearchAPI(SearchAPI):
         progress_interface=None,
     ):
         super().__init__(config, translator_module, blueprint, ubkg_instance, progress_interface)
-
-        self.app.url_map.converters["sennet_id"] = SenNetIDConverter
         self.app.config.update(config)
         self.app.register_blueprint(senotypes_blueprint)
 
