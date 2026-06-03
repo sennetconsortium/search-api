@@ -9,15 +9,21 @@ from atlas_consortia_commons.rest import abort_err_handler, get_http_exceptions_
 # Atlas Consortia commons
 from atlas_consortia_commons.ubkg import initialize_ubkg
 from atlas_consortia_commons.ubkg.ubkg_sdk import init_ontology
+from bson import CodecOptions
+from bson.codec_options import TypeRegistry
 from flask import Flask
+from mysql.connector.pooling import MySQLConnectionPool
+from pymongo import MongoClient
 from yaml import safe_load
 
 if "search-adaptor/src" not in sys.path:
     sys.path.append("search-adaptor/src")
 
 from libs.memcached_progress import MemcachedReadProgress, create_memcached_client
+from libs.mongo import DatetimeDecoder
+from search_api import SenNetSearchAPI
 from sennet_translator import Translator
-from status import create_blueprint
+from status import status_blueprint
 
 search_adaptor_module = importlib.import_module("app", "search-adaptor/src")
 
@@ -80,17 +86,47 @@ config["PARAM_SEARCH_RECOGNIZED_ENTITIES_BY_INDEX"] = app.config[
 
 config["STATUS_DISKS"] = app.config["STATUS_DISKS"]
 config["DEBUG_MODE"] = app.config["DEBUG_MODE"]
+config["UBKG_SERVER"] = app.config["UBKG_SERVER"]
+config["SENOTYPE_EDIT_GROUP_UUID"] = app.config["SENOTYPE_EDIT_GROUP_UUID"]
+config["SEARCH_CONFIG"] = config["INDICES"]
+config["ENTITY_API_URL"] = config["DEFAULT_ENTITY_API_URL"]
+
+# MySQL connection pool configuration, store the pool in app context for global access
+mysql_pool = MySQLConnectionPool(
+    pool_name="search_api_mysql_pool",
+    pool_size=5,
+    host=app.config["MYSQL_HOST"],
+    port=3306,
+    user=app.config["MYSQL_USER"],
+    password=app.config["MYSQL_PASSWORD"],
+    database=app.config["MYSQL_DATABASE"],
+    autocommit=True,
+)
+config["DB_POOL"] = mysql_pool
+
+# MongoDB configuration
+mongo_client = MongoClient(
+    host=app.config["MONGO_HOST"],
+    port=27017,
+    username=app.config["MONGO_USERNAME"],
+    password=app.config["MONGO_PASSWORD"],
+    authSource=app.config["MONGO_DB_NAME"],
+)
+mongo_client.admin.command("ping")
+codec_options = CodecOptions(type_registry=TypeRegistry([DatetimeDecoder()]))
+mongo_db = mongo_client.get_database(app.config["MONGO_DB_NAME"], codec_options=codec_options)
+config["MONGO_DB"] = mongo_db
 
 memcached_progress = None
 if config["MEMCACHED_MODE"]:
     memcached_client = create_memcached_client(config["MEMCACHED_SERVER"])
     memcached_progress = MemcachedReadProgress(memcached_client, config["MEMCACHED_PREFIX"])
+config["PROGRESS_INTERFACE"] = memcached_progress
 
 try:
     for exception in get_http_exceptions_classes():
         app.register_error_handler(exception, abort_err_handler)
     ubkg = initialize_ubkg(_config)
-    app.ubkg = ubkg
     with app.app_context():
         init_ontology()
 
@@ -104,18 +140,16 @@ def translator_factory(token, *args, **kwargs):
     return Translator(config=config, ubkg_instance=ubkg, token=token)
 
 
-status_blueprint = create_blueprint(config=config, progress_interface=memcached_progress)
-
 # This `app` will be imported by wsgi.py when deployed with uWSGI server
-search_api_instance = search_adaptor_module.SearchAPI(
+search_api_instance = SenNetSearchAPI(
     config=config,
+    blueprint=status_blueprint,  # this overrides the SearchAPI status endpoint
     translator_module=translator_factory,
     progress_interface=memcached_progress,
-    blueprint=status_blueprint,
     ubkg_instance=ubkg,
 )
 app = search_api_instance.app
 
 # For local standalone (non-docker) development/testing
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port="5005")
+    app.run(host="0.0.0.0", port=5005)

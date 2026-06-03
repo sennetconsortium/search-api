@@ -1,9 +1,5 @@
-import datetime
-import decimal
-import hashlib
 import json
 import logging
-import math
 import os
 import sys
 import time
@@ -11,29 +7,28 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
 from atlas_consortia_commons.object import enum_val
 from atlas_consortia_commons.ubkg import initialize_ubkg
 from flask import Config, Flask, Response
 from hubmap_commons.hm_auth import AuthHelper
 from hubmap_commons.S3_worker import S3Worker
-from indexer import Indexer
 from requests import RequestException, Session
-from requests.adapters import HTTPAdapter
-from urllib3 import Retry
 from yaml import safe_load
-
-from es_updater import ESBulkUpdater
-from libs.memcached_progress import MemcachedWriteProgress, create_memcached_client
-from libs.ontology import Ontology
 
 if "search-adaptor/src" not in sys.path:
     sys.path.append("search-adaptor/src")
 
-from opensearch_helper_functions import BulkUpdate
+from indexer import Indexer
 from translator.tranlation_helper_functions import get_all_reindex_enabled_indice_names
 from translator.translator_interface import TranslatorInterface
+
+from libs.elasticsearch import ESBulkUpdater, get_docs_from_es
+from libs.hash import calculate_sha256_hash
+from libs.http import new_session
+from libs.memcached_progress import MemcachedWriteProgress, create_memcached_client
+from libs.ontology import Ontology
 
 logging.basicConfig(
     format="[%(asctime)s] %(levelname)s in %(module)s: %(message)s",
@@ -278,7 +273,7 @@ class Translator(TranslatorInterface):
                         es_url = self.INDICES["indices"][index]["elasticsearch"]["url"].strip("/")
 
                         for actual_index in all_indices:
-                            u = self._get_docs_from_es(
+                            u = get_docs_from_es(
                                 index=actual_index,
                                 es_url=es_url,
                                 fields=["uuid"],
@@ -619,18 +614,9 @@ class Translator(TranslatorInterface):
     # Private methods
 
     def _new_session(self):
-        session = Session()
-        retries = Retry(
-            total=3,
-            backoff_factor=0.5,
-            status_forcelist=[429, 500, 502, 503, 504],
-        )
-        session.mount(self.entity_api_url, HTTPAdapter(max_retries=retries))
-
-        for index in self.index_config:
-            session.mount(index.url, HTTPAdapter(max_retries=retries))
-
-        return session
+        prefixes = [self.entity_api_url.rstrip("/")]
+        prefixes.extend([index.url.rstrip("/") for index in self.index_config])
+        return new_session(prefixes)
 
     def _call_entity_api(
         self,
@@ -687,61 +673,6 @@ class Translator(TranslatorInterface):
         # If result is a list or not a Dataset dict, no change - 7/13/2022 Max & Zhou
         return res.json()
 
-    def _get_docs_from_es(
-        self,
-        index: str,
-        es_url: str,
-        fields: list[str],
-        session: Session,
-        query: Optional[dict] = None,
-    ):
-        scroll = "1m"  # save scroll context for 1 minute
-        size = 10000
-        docs = []
-
-        # initial search with scroll and get id
-        search_url = f"{es_url}/{index}/_search?scroll={scroll}"
-        body = {
-            "_source": fields,
-            "size": size,
-        }
-        if query:
-            body["query"] = query
-        res = session.post(
-            search_url,
-            json=body,
-            timeout=TIMEOUT,
-        )
-        res.raise_for_status()
-        data = res.json()
-        scroll_id = data["_scroll_id"]
-        hits = data["hits"]["hits"]
-        docs.extend(
-            {"_id": hit["_id"], **{field: hit["_source"].get(field) for field in fields}}
-            for hit in hits
-        )
-
-        # scroll until no more hits
-        while hits:
-            scroll_resp = session.post(
-                f"{es_url}/_search/scroll",
-                json={"scroll": scroll, "scroll_id": scroll_id},
-                timeout=TIMEOUT,
-            )
-            scroll_resp.raise_for_status()
-            scroll_data = scroll_resp.json()
-            hits = scroll_data["hits"]["hits"]
-            if not hits:
-                break
-            docs.extend(
-                {"_id": hit["_id"], **{field: hit["_source"].get(field) for field in fields}}
-                for hit in hits
-            )
-            scroll_id = scroll_data["_scroll_id"]
-            time.sleep(1)
-
-        return docs
-
     def _upsert_index(
         self,
         entity_uuids: list[str],
@@ -757,7 +688,7 @@ class Translator(TranslatorInterface):
             # get doc_sha256s
             private_sha256s = {
                 doc["uuid"]: doc["doc_sha256"]
-                for doc in self._get_docs_from_es(
+                for doc in get_docs_from_es(
                     index=index.private,
                     es_url=index.url,
                     fields=["uuid", "doc_sha256"],
@@ -769,7 +700,7 @@ class Translator(TranslatorInterface):
 
             publish_sha256s = {
                 doc["uuid"]: doc["doc_sha256"]
-                for doc in self._get_docs_from_es(
+                for doc in get_docs_from_es(
                     index=index.public,
                     es_url=index.url,
                     fields=["uuid", "doc_sha256"],
@@ -789,7 +720,7 @@ class Translator(TranslatorInterface):
                         include_token=True,
                         session=session,
                     )
-                    actual_sha256 = self._calculate_doc_sha256_hash(priv_entity)
+                    actual_sha256 = calculate_sha256_hash(priv_entity)
 
                     if private_sha256s.get(entity_uuid) is None:
                         # entity does not exist in ES,
@@ -816,7 +747,7 @@ class Translator(TranslatorInterface):
                             include_token=False,
                             session=session,
                         )
-                        actual_sha256 = self._calculate_doc_sha256_hash(pub_entity)
+                        actual_sha256 = calculate_sha256_hash(pub_entity)
 
                         if publish_sha256s.get(entity_uuid) is None:
                             # entity does not exist in ES, insert it into ES
@@ -844,61 +775,6 @@ class Translator(TranslatorInterface):
 
         return failure_results
 
-    def _calculate_doc_sha256_hash(self, doc: Any) -> str:
-        norm_obj = self._normalized_obj(doc)
-        norm_json = json.dumps(norm_obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
-        return hashlib.sha256(norm_json.encode("utf-8")).hexdigest()
-
-    def _normalized_obj(self, obj: Any) -> Any:
-        if isinstance(obj, dict):
-            return {str(k): self._normalized_obj(v) for k, v in obj.items()}
-
-        if isinstance(obj, (list, tuple)):
-            items = [self._normalized_obj(v) for v in obj]
-            try:
-                items.sort(
-                    key=lambda x: json.dumps(
-                        x, sort_keys=True, separators=(",", ":"), ensure_ascii=False
-                    )
-                )
-            except Exception:
-                # fallback to original order if something goes wrong
-                pass
-            return items
-
-        if isinstance(obj, set):
-            items = [self._normalized_obj(v) for v in obj]
-            items.sort(
-                key=lambda x: json.dumps(
-                    x, sort_keys=True, separators=(",", ":"), ensure_ascii=False
-                )
-            )
-            return items
-
-        if isinstance(obj, bytes):
-            return obj.hex()
-
-        if isinstance(obj, decimal.Decimal):
-            return str(obj)
-
-        if isinstance(obj, datetime.datetime):
-            return obj.isoformat()
-
-        if isinstance(obj, datetime.date):
-            return obj.isoformat()
-
-        if obj is None or isinstance(obj, (str, int, float, bool)):
-            if isinstance(obj, float):
-                if math.isnan(obj) or math.isinf(obj):
-                    return str(obj)
-
-            return obj
-
-        if hasattr(obj, "__dict__"):
-            return self._normalized_obj(obj.__dict__)
-
-        return str(obj)
-
     def _print_to_s3(self, text: str):
         # We must load from config file since we're not in the flask app context
         file_dir = os.path.abspath(os.path.dirname(__file__))
@@ -917,26 +793,6 @@ class Translator(TranslatorInterface):
         )
         url = s3_worker.stash_response_body_if_big(text)
         return url
-
-    def _bulk_update_es(self, bulk_update: BulkUpdate, index: str, es_url: str, session: Session):
-        if not bulk_update.upserts and not bulk_update.deletes:
-            raise ValueError("No upserts or deletes provided.")
-
-        url = f"{es_url}/{index}/_bulk"
-        headers = {"Content-Type": "application/x-ndjson"}
-
-        # Preparing ndjson content
-        upserts = [
-            f'{{"update":{{"_id":"{upsert["uuid"]}"}}}}\n{{"doc":{json.dumps(upsert, separators=(",", ":"))},"doc_as_upsert":true}}'
-            for upsert in bulk_update.upserts
-        ]
-        deletes = [
-            f'{{ "delete": {{ "_id": "{delete_uuid}" }} }}' for delete_uuid in bulk_update.deletes
-        ]
-
-        body = "\n".join(deletes + upserts) + "\n"
-
-        return session.post(url, headers=headers, data=body, timeout=TIMEOUT)
 
     def __get_scope_list(
         self,
@@ -1042,8 +898,9 @@ if __name__ == "__main__":
     start = time.time()
     logger.info("############# Full index via script started #############")
 
-    translator.delete_and_recreate_indices(specific_index=None)
-    translator.delete_and_recreate_indices(specific_index="files")
+    # translator.delete_and_recreate_indices(specific_index=None)
+    # translator.delete_and_recreate_indices(specific_index="files")
+    translator.delete_and_recreate_indices(specific_index="senotypes")
     # translator.translate_all()
 
     # Show the failed entity-api calls and the uuids
