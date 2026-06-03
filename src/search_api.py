@@ -28,8 +28,8 @@ class SenNetSearchAPI(SearchAPI):
     def get_target_index(self, request, index_without_prefix):
         target_index = super().get_target_index(request, index_without_prefix)
 
-        if index_without_prefix == "senotypes":
-            target_index = self.INDICES["indices"]["senotypes"]["public"]
+        if index_without_prefix in ["senotypes", "senotypes-test"]:
+            target_index = self.INDICES["indices"][index_without_prefix]["public"]
             if not request.authorization or not self.SENOTYPE_EDIT_GROUP_UUID:
                 return target_index
 
@@ -46,6 +46,6 @@ class SenNetSearchAPI(SearchAPI):
             # check if user belongs to the senotype edit group, if so, direct the call to
             # the private senotypes index
             if self.SENOTYPE_EDIT_GROUP_UUID in user_info.get("hmgroupids", []):
-                target_index = self.INDICES["indices"]["senotypes"]["private"]
+                target_index = self.INDICES["indices"][index_without_prefix]["private"]
 
         return target_index
