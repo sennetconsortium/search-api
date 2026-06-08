@@ -101,7 +101,6 @@ def _reindex_test_senotypes_thread(senotypes_config: dict, collection: Collectio
                     es_url=senotypes_config["elasticsearch"]["url"],
                     fields=["doc_sha256"],
                     session=session,
-                    query={"terms": {"_id": uuids}},
                 )
                 if "doc_sha256" in doc
             }
@@ -282,7 +281,6 @@ def _reindex_senotypes_thread(
                     es_url=senotypes_config["elasticsearch"]["url"],
                     fields=["doc_sha256"],
                     session=session,
-                    query={"terms": {"_id": senotypeids}},
                 )
                 if "doc_sha256" in doc
             }
