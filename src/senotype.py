@@ -111,6 +111,12 @@ def _reindex_test_senotypes_thread(senotypes_config: dict, collection: Collectio
 
         try:
             with ESBulkUpdater(es_url=es_url, index=priv_index, session=session) as priv_updater:
+                # delete any senotypes from ES that no longer exist in the database
+                docs_to_delete = set(private_sha256s.keys()) - set(uuids)
+                for doc_id in docs_to_delete:
+                    priv_updater.add_delete(doc_id=doc_id)
+
+                # add or update senotypes in ES based on the database records
                 for item in items:
                     try:
                         actual_sha256 = calculate_sha256_hash(item)
@@ -289,6 +295,12 @@ def _reindex_senotypes_thread(
             index=senotypes_config["private"],
             session=session,
         ) as priv_updater:
+            # delete any senotypes from ES that no longer exist in the database
+            docs_to_delete = set(private_sha256s.keys()) - set(senotypeids)
+            for doc_id in docs_to_delete:
+                priv_updater.add_delete(doc_id=doc_id)
+
+            # add or update senotypes in ES based on the database records
             for row in rows:
                 try:
                     senotypeid = row["senotypeid"]
