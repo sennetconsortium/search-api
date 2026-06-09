@@ -13,7 +13,7 @@ from requests import Session
 from libs.elasticsearch import ESBulkUpdater, get_docs_from_es
 from libs.hash import calculate_sha256_hash
 from libs.http import new_session
-from libs.ontology import GeneManager
+from libs.ontology import GeneManager, Ontology
 
 logger = logging.getLogger()
 
@@ -169,6 +169,9 @@ def reindex_senotype(id: str):
     entity_api_url = current_app.config["ENTITY_API_URL"]
     es_url = senotypes_config["elasticsearch"]["url"]
     ubkg_url = current_app.config["UBKG_SERVER"].rstrip("/")
+    category_map = Ontology.ops(
+        as_data_dict=True, prop_callback=None, key="organ_uberon", val_key="category"
+    ).organ_types()
 
     with new_session([entity_api_url, es_url]) as session, GeneManager(ubkg_url) as gene_manager:
         try:
@@ -179,6 +182,7 @@ def reindex_senotype(id: str):
                 entity_api_url=entity_api_url,
                 token=token,
                 gene_manager=gene_manager,
+                category_map=category_map,
             )
 
         except Exception as e:
@@ -211,6 +215,11 @@ def reindex_all_senotypes():
     if not token:
         return rest_server_err("Authorization token is required")
 
+    category_map = (
+        Ontology.ops(
+            as_data_dict=True, prop_callback=None, key="organ_uberon", val_key="category"
+        ).organ_types(),
+    )
     future = background_executor.submit(
         _reindex_senotypes_thread,
         senotypes_config=senotypes_config,
@@ -218,6 +227,7 @@ def reindex_all_senotypes():
         ubkg_url=current_app.config["UBKG_SERVER"].rstrip("/"),
         token=token,
         db_pool=current_app.config["DB_POOL"],
+        category_map=category_map,
     )
     future.add_done_callback(_log_reindex_all_result)
 
@@ -255,6 +265,7 @@ def _reindex_senotypes_thread(
     ubkg_url: str,
     token: str,
     db_pool: MySQLConnectionPool,
+    category_map: dict[str, dict[str, Any]],
 ):
     try:
         # retrieve all senotype records from the database
@@ -314,6 +325,7 @@ def _reindex_senotypes_thread(
                         entity_api_url=entity_api_url,
                         token=token,
                         gene_manager=gene_manager,
+                        category_map=category_map,
                     )
                     actual_sha256 = calculate_sha256_hash(doc)
                     if private_sha256s.get(senotypeid) is None:
@@ -348,6 +360,7 @@ def _build_doc(
     entity_api_url: str,
     token: str,
     gene_manager: GeneManager,
+    category_map: dict[str, dict[str, Any]],
 ) -> dict[str, Any]:
     data = json.loads(row)
     doc: dict[str, Any] = {"sennet_id": id}
@@ -435,6 +448,9 @@ def _build_doc(
                 code = obj.get("code")
                 if code and code in gene_names:
                     item["name"] = gene_names[code]["name"]
+                if predicate_term == "located_in" and code:
+                    category = category_map.get(code)
+                    item["category"] = category.get("term") if category else obj.get("term")
                 if item:
                     items.append(item)
             if items:
