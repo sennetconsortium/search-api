@@ -24,6 +24,7 @@ class SenNetSearchAPI(SearchAPI):
         super().__init__(config, translator_module, blueprint, ubkg_instance, progress_interface)
         self.app.config.update(config)
         self.app.register_blueprint(senotypes_blueprint)
+        self.app.ubkg = ubkg_instance
 
     def get_target_index(self, request, index_without_prefix):
         target_index = super().get_target_index(request, index_without_prefix)
