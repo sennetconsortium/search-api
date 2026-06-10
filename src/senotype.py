@@ -215,11 +215,10 @@ def reindex_all_senotypes():
     if not token:
         return rest_server_err("Authorization token is required")
 
-    category_map = (
-        Ontology.ops(
+    category_map = Ontology.ops(
             as_data_dict=True, prop_callback=None, key="organ_uberon", val_key="category"
-        ).organ_types(),
-    )
+        ).organ_types()
+
     future = background_executor.submit(
         _reindex_senotypes_thread,
         senotypes_config=senotypes_config,
