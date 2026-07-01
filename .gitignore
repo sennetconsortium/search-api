@@ -19,6 +19,8 @@ src/instance/search-config.yaml
 
 .idea
 .ignore
+pyrightconfig.json
+*.lua
 
 *.DS_Store
 
