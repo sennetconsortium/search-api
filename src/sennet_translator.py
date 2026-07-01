@@ -17,12 +17,13 @@ from hubmap_commons.S3_worker import S3Worker
 from requests import RequestException, Session
 from yaml import safe_load
 
+from search_api import SenNetTranslatorInterface
+
 if "search-adaptor/src" not in sys.path:
     sys.path.append("search-adaptor/src")
 
 from indexer import Indexer
 from translator.tranlation_helper_functions import get_all_reindex_enabled_indice_names
-from translator.translator_interface import TranslatorInterface
 
 from libs.elasticsearch import ESBulkUpdater, get_docs_from_es
 from libs.hash import calculate_sha256_hash
@@ -48,7 +49,7 @@ class Index:
     private: str
 
 
-class Translator(TranslatorInterface):
+class Translator(SenNetTranslatorInterface):
     ACCESS_LEVEL_PUBLIC = "public"
     ACCESS_LEVEL_CONSORTIUM = "consortium"
     DATASET_STATUS_PUBLISHED = "published"
