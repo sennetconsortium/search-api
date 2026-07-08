@@ -1,4 +1,3 @@
-import importlib
 import logging
 import os
 import sys
@@ -24,8 +23,6 @@ from libs.mongo import DatetimeDecoder
 from search_api import SenNetSearchAPI
 from sennet_translator import Translator
 from status import status_blueprint
-
-search_adaptor_module = importlib.import_module("app", "search-adaptor/src")
 
 # Root logger configuration
 global logger
