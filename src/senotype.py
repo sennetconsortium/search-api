@@ -4,16 +4,16 @@ from concurrent.futures import ThreadPoolExecutor
 from time import sleep
 from typing import Any
 
-from atlas_consortia_commons.rest import rest_not_found, rest_server_err
+from atlas_consortia_commons.rest import rest_not_found, rest_server_err, rest_unauthorized
 from flask import Blueprint, current_app, g, request
 from mysql.connector.pooling import MySQLConnectionPool
-from pymongo.collection import Collection
-from requests import Session
+from requests import HTTPError, Session
 
 from libs.elasticsearch import ESBulkUpdater, get_docs_from_es
 from libs.hash import calculate_sha256_hash
 from libs.http import new_session
 from libs.ontology import GeneManager, Ontology
+from libs.senotype import SenotypeAPIService
 
 logger = logging.getLogger()
 
@@ -34,13 +34,21 @@ def reindex_test_senotype(id: str):
     if not senotypes_config:
         return rest_server_err("Senotypes test index configuration not found")
 
+    token = request.authorization.token if request.authorization else None
+    if not token:
+        return rest_server_err("Authorization token is required")
+
+    document_source_endpoint = senotypes_config["document_source_endpoint"]
     try:
-        collection = current_app.config["MONGO_DB"]["senotypes"]
-        doc = collection.find_one({"uuid": id}, {"_id": 0})
+        with SenotypeAPIService(document_source_endpoint) as senotype_api:
+            doc = senotype_api.get_senotype(uuid=id, token=token)
         if not doc:
             return rest_not_found(f"Senotype with uuid {id} not found")
-    except Exception as e:
-        logger.exception(f"Failed to retrieve senotype with uuid {id} from MongoDB: {e}")
+    except HTTPError as e:
+        if e.response.status_code == 401:
+            return rest_unauthorized(f"Unauthorized to access senotype-api for uuid {id}")
+
+        logger.exception(f"Failed to retrieve senotype with uuid {id} from senotype-api: {e}")
         return rest_server_err(f"Failed to retrieve senotype with uuid {id}")
 
     try:
@@ -55,7 +63,7 @@ def reindex_test_senotype(id: str):
         logger.exception(f"Failed to index senotype with uuid {id} into Elasticsearch: {e}")
         return rest_server_err(f"Failed to index senotype with uuid {id} into Elasticsearch")
 
-    return {"message": f"Senotype with uuid {doc["uuid"]} reindexed successfully"}, 200
+    return {"message": f"Senotype with uuid {doc['uuid']} reindexed successfully"}, 200
 
 
 # Auth handled in gateway
@@ -74,67 +82,97 @@ def reindex_all_test_senotypes():
     future = background_executor.submit(
         _reindex_test_senotypes_thread,
         senotypes_config=senotypes_config,
-        collection=current_app.config["MONGO_DB"]["senotypes"],
+        token=token,
     )
     future.add_done_callback(_log_reindex_all_result)
 
     return {"message": "Request of reindex all senotypes accepted"}, 202
 
 
-def _reindex_test_senotypes_thread(senotypes_config: dict, collection: Collection):
-    try:
-        items = [item for item in collection.find({}, {"_id": 0})]
-    except Exception as e:
-        logger.exception(f"Failed to retrieve senotypes from MongoDB: {e}")
-        return
-
+def _reindex_test_senotypes_thread(senotypes_config: dict, token: str):
+    document_source_endpoint = senotypes_config["document_source_endpoint"]
     es_url = senotypes_config["elasticsearch"]["url"]
     priv_index = senotypes_config["private"]
+    chunk_size = 50
 
-    with new_session(es_url) as session:
-        try:
-            uuids = [item["uuid"] for item in items]
-            private_sha256s = {
-                doc["_id"]: doc["doc_sha256"]
-                for doc in get_docs_from_es(
-                    index=priv_index,
-                    es_url=senotypes_config["elasticsearch"]["url"],
-                    fields=["doc_sha256"],
-                    session=session,
-                )
-                if "doc_sha256" in doc
-            }
-        except Exception as e:
-            logger.exception(f"Failed to retrieve existing senotypes data from Elasticsearch: {e}")
-            return
+    seen_uuids: set[str] = set()
 
-        try:
+    try:
+        with (
+            SenotypeAPIService(document_source_endpoint) as senotype_api,
+            new_session(es_url) as session,
+        ):
             with ESBulkUpdater(es_url=es_url, index=priv_index, session=session) as priv_updater:
-                # delete any senotypes from ES that no longer exist in the database
-                docs_to_delete = set(private_sha256s.keys()) - set(uuids)
-                for doc_id in docs_to_delete:
-                    priv_updater.add_delete(doc_id=doc_id)
+                for chunk in senotype_api.iter_senotypes(token=token, chunk_size=chunk_size):
+                    if not chunk:
+                        break
+                    chunk_uuids: list[str] = [item["uuid"] for item in chunk]
+                    seen_uuids.update(chunk_uuids)
 
-                # add or update senotypes in ES based on the database records
-                for item in items:
                     try:
-                        actual_sha256 = calculate_sha256_hash(item)
-                        if private_sha256s.get(item["uuid"]) is None:
-                            # doc doesn't exist in ES, create it
-                            item["doc_sha256"] = actual_sha256
-                            priv_updater.add_update(doc_id=item["uuid"], doc=item, upsert=True)
-                        elif private_sha256s[item["uuid"]] != actual_sha256:
-                            # doc exists but has changed, update it in ES
-                            item["doc_sha256"] = actual_sha256
-                            priv_updater.add_delete(doc_id=item["uuid"])
-                            priv_updater.add_update(doc_id=item["uuid"], doc=item, upsert=True)
-
+                        private_sha256s = {
+                            doc["_id"]: doc["doc_sha256"]
+                            for doc in get_docs_from_es(
+                                index=priv_index,
+                                es_url=es_url,
+                                fields=["doc_sha256"],
+                                session=session,
+                                query={"ids": {"values": chunk_uuids}},
+                            )
+                            if "doc_sha256" in doc
+                        }
                     except Exception as e:
-                        logger.exception(f"Failed to index senotype with uuid {item['uuid']}: {e}")
+                        logger.exception(
+                            f"Failed to retrieve existing senotypes data from Elasticsearch "
+                            f"for chunk starting at uuid {chunk_uuids[0]}: {e}"
+                        )
+                        continue
 
-        except Exception as e:
-            logger.exception(f"Failed to index senotypes into Elasticsearch: {e}")
+                    # add or update senotypes in ES based on the chunk just fetched
+                    for item in chunk:
+                        uuid = item["uuid"]
+                        try:
+                            actual_sha256 = calculate_sha256_hash(item)
+                            if private_sha256s.get(uuid) is None:
+                                # doc doesn't exist in ES, create it
+                                item["doc_sha256"] = actual_sha256
+                                priv_updater.add_update(doc_id=uuid, doc=item, upsert=True)
+                            elif private_sha256s[uuid] != actual_sha256:
+                                # doc exists but has changed, update it in ES
+                                item["doc_sha256"] = actual_sha256
+                                priv_updater.add_delete(doc_id=uuid)
+                                priv_updater.add_update(doc_id=uuid, doc=item, upsert=True)
+                        except Exception as e:
+                            logger.exception(f"Failed to index senotype with uuid {uuid}: {e}")
+
+                # delete any senotypes from ES that no longer exist in senotype-api
+                try:
+                    existing_ids = {
+                        doc["_id"]
+                        for doc in get_docs_from_es(
+                            index=priv_index,
+                            es_url=es_url,
+                            fields=[],
+                            session=session,
+                        )
+                    }
+                    for doc_id in existing_ids - seen_uuids:
+                        priv_updater.add_delete(doc_id=doc_id)
+                except Exception as e:
+                    logger.exception(
+                        f"Failed to retrieve existing senotype ids from Elasticsearch: {e}"
+                    )
+
+    except HTTPError as e:
+        if e.response.status_code == 401:
+            logger.error("Unauthorized to access senotype-api during reindexing")
             return
+        logger.exception(f"Failed to retrieve senotypes from senotype-api: {e}")
+        return
+
+    except Exception as e:
+        logger.exception(f"Failed to reindex senotypes: {e}")
+        return
 
     logger.info("Finished reindexing senotypes")
 
@@ -216,8 +254,8 @@ def reindex_all_senotypes():
         return rest_server_err("Authorization token is required")
 
     category_map = Ontology.ops(
-            as_data_dict=True, prop_callback=None, key="organ_uberon", val_key="category"
-        ).organ_types()
+        as_data_dict=True, prop_callback=None, key="organ_uberon", val_key="category"
+    ).organ_types()
 
     future = background_executor.submit(
         _reindex_senotypes_thread,

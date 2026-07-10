@@ -8,18 +8,14 @@ from atlas_consortia_commons.rest import abort_err_handler, get_http_exceptions_
 # Atlas Consortia commons
 from atlas_consortia_commons.ubkg import initialize_ubkg
 from atlas_consortia_commons.ubkg.ubkg_sdk import init_ontology
-from bson import CodecOptions
-from bson.codec_options import TypeRegistry
 from flask import Flask
 from mysql.connector.pooling import MySQLConnectionPool
-from pymongo import MongoClient
 from yaml import safe_load
 
 if "search-adaptor/src" not in sys.path:
     sys.path.append("search-adaptor/src")
 
 from libs.memcached_progress import MemcachedReadProgress, create_memcached_client
-from libs.mongo import DatetimeDecoder
 from search_api import SenNetSearchAPI
 from sennet_translator import Translator
 from status import status_blueprint
@@ -100,19 +96,6 @@ mysql_pool = MySQLConnectionPool(
     autocommit=True,
 )
 config["DB_POOL"] = mysql_pool
-
-# MongoDB configuration
-mongo_client = MongoClient(
-    host=app.config["MONGO_HOST"],
-    port=27017,
-    username=app.config["MONGO_USERNAME"],
-    password=app.config["MONGO_PASSWORD"],
-    authSource=app.config["MONGO_DB_NAME"],
-)
-mongo_client.admin.command("ping")
-codec_options = CodecOptions(type_registry=TypeRegistry([DatetimeDecoder()]))
-mongo_db = mongo_client.get_database(app.config["MONGO_DB_NAME"], codec_options=codec_options)
-config["MONGO_DB"] = mongo_db
 
 memcached_progress = None
 if config["MEMCACHED_MODE"]:
