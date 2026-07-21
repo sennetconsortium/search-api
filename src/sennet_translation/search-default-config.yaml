@@ -46,6 +46,12 @@ mappings:
         mapping:
           type: keyword
 
+    # Lot numbers can contain hyphens, not purely numbers
+    - metadata.calibration_kit_lot_number:
+        path_match: "metadata.calibration_kit_lot_number"
+        mapping:
+          type: keyword
+
     # These fields are problematic with documents containing antibodies.
     # Antibodies have "_value" and "_number" fields that are not numeric.
     - metadata_value_fields:
@@ -77,12 +83,6 @@ mappings:
     # Treat all fields inside ingest_metadata.dag_provenance_list as keyword
     - ingest_metadata_dag_provenance_list:
         path_match: "*ingest_metadata.dag_provenance_list.input_parameters.value"
-        mapping:
-          type: keyword
-
-    # Lot numbers can contain hyphens, not purely numbers
-    - metadata.calibration_kit_lot_number:
-        path_match: "metadata.calibration_kit_lot_number"
         mapping:
           type: keyword
 
